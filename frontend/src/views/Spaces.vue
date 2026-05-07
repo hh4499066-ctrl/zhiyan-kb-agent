@@ -1,14 +1,20 @@
 <template>
   <div class="page">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">知识空间</h2>
+        <p class="page-subtitle">按业务、部门或项目组织可检索知识。</p>
+      </div>
+      <el-button type="primary" @click="open()"><el-icon><Plus /></el-icon>新增空间</el-button>
+    </div>
     <div class="toolbar">
       <el-input v-model="keyword" placeholder="搜索知识空间" style="width:260px" clearable />
-      <el-button type="primary" @click="load">搜索</el-button>
-      <el-button @click="open()">新增空间</el-button>
+      <el-button type="primary" @click="load"><el-icon><Search /></el-icon>搜索</el-button>
     </div>
     <div class="grid">
       <el-card v-for="s in rows" :key="s.id" shadow="never">
         <h3>{{ s.name }}</h3>
-        <p class="muted">{{ s.description }}</p>
+        <p class="muted">{{ s.description || '暂无描述' }}</p>
         <el-descriptions :column="2" size="small">
           <el-descriptions-item label="文档">{{ s.documentCount }}</el-descriptions-item>
           <el-descriptions-item label="问答">{{ s.qaCount }}</el-descriptions-item>
@@ -35,6 +41,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])

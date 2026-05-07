@@ -11,7 +11,7 @@ const router = createRouter({
       component: Layout,
       redirect: '/dashboard',
       children: [
-        { path: 'dashboard', component: () => import('./views/Dashboard.vue'), meta: { title: '数据看板' } },
+        { path: 'dashboard', component: () => import('./views/Dashboard.vue'), meta: { title: '仪表盘' } },
         { path: 'users', component: () => import('./views/Users.vue'), meta: { title: '用户管理', roles: ['admin'] } },
         { path: 'departments', component: () => import('./views/Departments.vue'), meta: { title: '部门管理', roles: ['admin'] } },
         { path: 'spaces', component: () => import('./views/Spaces.vue'), meta: { title: '知识空间' } },

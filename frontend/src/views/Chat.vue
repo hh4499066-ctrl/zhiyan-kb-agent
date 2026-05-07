@@ -1,15 +1,21 @@
 <template>
   <div class="page chat-page">
     <aside class="panel sessions">
-      <el-button type="primary" style="width:100%" @click="newSession">新建对话</el-button>
+      <el-button type="primary" class="full" @click="newSession">
+        <el-icon><Plus /></el-icon>
+        新建对话
+      </el-button>
       <el-divider />
-      <div class="muted label">检索范围</div>
-      <el-select v-model="spaceId" placeholder="全库自动检索" style="width:100%">
+      <label class="field-label">检索范围</label>
+      <el-select v-model="spaceId" placeholder="全库自动检索" class="full">
         <el-option label="全库自动检索" :value="0" />
         <el-option v-for="s in spaces" :key="s.id" :label="s.name" :value="s.id" />
       </el-select>
-      <div class="hint">不知道问题在哪个空间时保持“全库自动检索”。选择空间只是限制检索范围。</div>
-      <el-button style="width:100%;margin-top:10px" @click="clear">清空当前上下文</el-button>
+      <p class="hint">不知道问题属于哪个空间时保持全库检索；选择空间后只会限定该知识空间。</p>
+      <el-button class="full" @click="clear">
+        <el-icon><Delete /></el-icon>
+        清空当前上下文
+      </el-button>
       <el-divider />
       <div class="history-title">历史对话</div>
       <div class="history">
@@ -17,6 +23,7 @@
           v-for="s in sessions"
           :key="s.sessionId"
           :class="['session-item', s.sessionId === sessionId ? 'active' : '']"
+          type="button"
           @click="loadSession(s)"
         >
           <span>{{ s.title }}</span>
@@ -25,20 +32,35 @@
         <el-empty v-if="!sessions.length" description="暂无历史" :image-size="70" />
       </div>
     </aside>
-    <section class="chat-main">
+
+    <section class="chat-main panel">
+      <div class="chat-topline">
+        <div>
+          <h2>智能问答</h2>
+          <p>自动召回相关文档，并保留当前会话上下文。</p>
+        </div>
+        <el-tag round type="success">RAG 检索增强</el-tag>
+      </div>
+
       <div class="messages">
-        <el-empty v-if="!messages.length" description="输入问题后，系统会自动在全库中检索相关文档" />
+        <el-empty v-if="!messages.length" description="输入问题后，系统会自动在知识库中检索相关文档" />
         <div v-for="m in messages" :key="m.id" :class="['chat-bubble', m.role === 'USER' ? 'chat-user' : 'chat-ai']">
           {{ m.content }}
           <div v-if="m.refs?.length" class="refs">
             <b>引用来源</b>
-            <div v-for="r in m.refs" :key="r.chunkId">《{{ r.documentTitle }}》：{{ r.chunkContent.slice(0, 120) }}...（{{ Number(r.score).toFixed(2) }}）</div>
+            <div v-for="r in m.refs" :key="r.chunkId">
+              《{{ r.documentTitle }}》：{{ r.chunkContent.slice(0, 120) }}...（{{ Number(r.score).toFixed(2) }}）
+            </div>
           </div>
         </div>
       </div>
+
       <div class="input">
         <el-input v-model="question" type="textarea" :rows="3" :placeholder="inputPlaceholder" @keydown.ctrl.enter="ask" />
-        <el-button type="primary" :loading="loading" @click="ask">发送</el-button>
+        <el-button type="primary" :loading="loading" @click="ask">
+          <el-icon><Promotion /></el-icon>
+          发送
+        </el-button>
       </div>
     </section>
   </div>
@@ -48,6 +70,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Delete, Plus, Promotion } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const route = useRoute()
@@ -59,7 +82,7 @@ const question = ref('')
 const loading = ref(false)
 const messages = ref<any[]>([])
 const viewingHistory = ref(false)
-const inputPlaceholder = computed(() => viewingHistory.value ? '' : '请输入你的问题，例如：项目启动失败怎么办？')
+const inputPlaceholder = computed(() => viewingHistory.value ? '' : '请输入你的问题，例如：项目启动失败怎么处理？')
 
 function newSession() {
   sessionId.value = `web-${Date.now()}`
@@ -131,19 +154,146 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.chat-page { display: grid; grid-template-columns: 300px 1fr; gap: 14px; height: calc(100vh - 60px); }
-.sessions { height: fit-content; max-height: calc(100vh - 96px); overflow: auto; }
-.label { margin-bottom: 8px; font-size: 13px; }
-.hint { margin-top: 8px; color: #6b7280; font-size: 12px; line-height: 1.5; }
-.history-title { font-weight: 700; margin-bottom: 8px; }
-.history { display: flex; flex-direction: column; gap: 8px; }
-.session-item { text-align: left; border: 1px solid #e5e7eb; background:#fff; border-radius:8px; padding:10px; cursor:pointer; color:#1f2937; }
-.session-item.active { border-color:#0f766e; background:#ecfdf5; }
-.session-item span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.session-item small { display:block; margin-top:4px; color:#6b7280; }
-.chat-main { display: grid; grid-template-rows: 1fr auto; gap: 12px; min-height: 0; }
-.messages { overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 10px; }
-.input { display: grid; grid-template-columns: 1fr 110px; gap: 10px; background:#fff; border-top:1px solid #e5e7eb; padding: 12px; }
-.refs { margin-top: 10px; color: #4b5563; font-size: 13px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
-@media (max-width: 820px) { .chat-page { grid-template-columns: 1fr; height:auto; } .input { grid-template-columns: 1fr; } }
+.chat-page {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+  height: calc(100vh - 78px);
+  min-height: 640px;
+}
+
+.sessions {
+  min-height: 0;
+  overflow: auto;
+}
+
+.full {
+  width: 100%;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.hint {
+  margin: 10px 0 12px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.history-title {
+  margin-bottom: 10px;
+  color: #132033;
+  font-weight: 800;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #dfe8ee;
+  background: #fff;
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: #1f2937;
+  transition: border-color 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
+}
+
+.session-item:hover,
+.session-item.active {
+  border-color: #10b6a6;
+  background: #effbf8;
+  box-shadow: 0 8px 20px rgba(16, 182, 166, 0.12);
+}
+
+.session-item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.session-item small {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+}
+
+.chat-main {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.chat-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e4edf1;
+}
+
+.chat-topline h2 {
+  margin: 0;
+  color: #132033;
+  font-size: 20px;
+}
+
+.chat-topline p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.messages {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.input {
+  display: grid;
+  grid-template-columns: 1fr 108px;
+  gap: 10px;
+  padding: 14px;
+  border-top: 1px solid #e4edf1;
+  background: rgba(248, 252, 252, 0.9);
+}
+
+.refs {
+  margin-top: 10px;
+  color: #4b5563;
+  font-size: 13px;
+  border-top: 1px solid rgba(226, 232, 240, 0.75);
+  padding-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .chat-page {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .input {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

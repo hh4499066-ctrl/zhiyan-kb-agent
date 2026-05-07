@@ -1,7 +1,23 @@
 :root {
-  color: #1f2a37;
-  background: #f5f7fb;
-  font-family: Inter, "Microsoft YaHei", Arial, sans-serif;
+  color: #132033;
+  background: #f5faf9;
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --brand: #10b6a6;
+  --brand-strong: #0b958a;
+  --brand-soft: #e8fbf7;
+  --ink: #132033;
+  --muted: #667085;
+  --line: #dfe8ee;
+  --panel: rgba(255, 255, 255, 0.92);
+  --shadow: 0 18px 50px rgba(21, 60, 74, 0.12);
+  --shadow-soft: 0 8px 26px rgba(21, 60, 74, 0.08);
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -9,8 +25,45 @@ body {
   min-width: 320px;
 }
 
+button,
+a,
+.el-button,
+.el-menu-item,
+.el-select,
+.el-upload {
+  cursor: pointer;
+}
+
+#app {
+  min-height: 100vh;
+}
+
 .page {
-  padding: 18px;
+  min-height: 100%;
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.page-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .toolbar {
@@ -22,42 +75,134 @@ body {
 }
 
 .panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--panel);
+  border: 1px solid rgba(214, 229, 234, 0.92);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .stat {
-  border-left: 4px solid #0f766e;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #24d8bd, #0b958a);
 }
 
 .chat-bubble {
-  max-width: 78%;
-  padding: 12px 14px;
+  max-width: min(78%, 760px);
+  padding: 13px 15px;
   border-radius: 8px;
-  line-height: 1.7;
+  line-height: 1.75;
   white-space: pre-wrap;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 
 .chat-user {
   margin-left: auto;
-  background: #0f766e;
+  background: linear-gradient(135deg, #12bfae, #0a8f84);
   color: #fff;
 }
 
 .chat-ai {
   margin-right: auto;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dce8ee;
+  color: #243447;
+}
+
+.el-button {
+  border-radius: 8px;
+  font-weight: 650;
+  transition: border-color 200ms ease, background-color 200ms ease, color 200ms ease, box-shadow 200ms ease;
+}
+
+.el-button--primary {
+  --el-button-bg-color: #10b6a6;
+  --el-button-border-color: #10b6a6;
+  --el-button-hover-bg-color: #0b958a;
+  --el-button-hover-border-color: #0b958a;
+  --el-button-active-bg-color: #08796f;
+  --el-button-active-border-color: #08796f;
+  box-shadow: 0 10px 22px rgba(16, 182, 166, 0.2);
+}
+
+.el-button--success {
+  --el-button-bg-color: #1ba970;
+  --el-button-border-color: #1ba970;
+  --el-button-hover-bg-color: #14885c;
+  --el-button-hover-border-color: #14885c;
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #dce6ed inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px #10b6a6 inset, 0 0 0 3px rgba(16, 182, 166, 0.16);
+}
+
+.el-table {
+  --el-table-header-bg-color: #f8fbfb;
+  --el-table-header-text-color: #475569;
+  --el-table-row-hover-bg-color: #eefbf8;
+  border-radius: 8px;
+}
+
+.el-card {
+  border-radius: 8px;
+  border-color: rgba(214, 229, 234, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.el-dialog,
+.el-drawer {
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+  }
+
+  .chat-bubble {
+    max-width: 92%;
+  }
 }

@@ -1,9 +1,15 @@
 <template>
   <div class="page">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">用户管理</h2>
+        <p class="page-subtitle">维护账号、角色和基础联系方式。</p>
+      </div>
+      <el-button type="primary" @click="open()"><el-icon><Plus /></el-icon>新增用户</el-button>
+    </div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="搜索用户名/姓名" style="width: 260px" clearable />
-      <el-button type="primary" @click="load">搜索</el-button>
-      <el-button @click="open()">新增用户</el-button>
+      <el-input v-model="keyword" placeholder="搜索用户名或姓名" style="width: 260px" clearable />
+      <el-button type="primary" @click="load"><el-icon><Search /></el-icon>搜索</el-button>
     </div>
     <section class="panel">
       <el-table :data="rows" stripe>
@@ -12,7 +18,7 @@
         <el-table-column prop="role" label="角色" />
         <el-table-column prop="email" label="邮箱" />
         <el-table-column prop="status" label="状态" />
-        <el-table-column label="操作" width="240">
+        <el-table-column label="操作" width="250">
           <template #default="{ row }">
             <el-button size="small" @click="open(row)">编辑</el-button>
             <el-button size="small" @click="status(row)">{{ row.status === 'ENABLED' ? '禁用' : '启用' }}</el-button>
@@ -25,7 +31,7 @@
       <el-form label-width="90px">
         <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
         <el-form-item label="姓名"><el-input v-model="form.realName" /></el-form-item>
-        <el-form-item label="密码" v-if="!form.id"><el-input v-model="form.password" /></el-form-item>
+        <el-form-item v-if="!form.id" label="密码"><el-input v-model="form.password" /></el-form-item>
         <el-form-item label="角色">
           <el-select v-model="form.role"><el-option v-for="r in roles" :key="r" :label="r" :value="r" /></el-select>
         </el-form-item>
@@ -40,6 +46,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const keyword = ref('')

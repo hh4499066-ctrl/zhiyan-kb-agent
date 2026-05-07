@@ -1,12 +1,21 @@
 <template>
   <div class="page">
-    <div class="toolbar"><el-button type="primary" @click="open()">新增记忆</el-button></div>
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">长期记忆</h2>
+        <p class="page-subtitle">记录用户偏好、身份和项目背景，辅助连续对话。</p>
+      </div>
+      <el-button type="primary" @click="open()"><el-icon><Plus /></el-icon>新增记忆</el-button>
+    </div>
     <section class="panel">
       <el-table :data="rows">
         <el-table-column prop="memoryType" label="类型" width="160" />
         <el-table-column prop="content" label="内容" />
         <el-table-column label="操作" width="160">
-          <template #default="{ row }"><el-button size="small" @click="open(row)">编辑</el-button><el-button size="small" type="danger" @click="remove(row)">删除</el-button></template>
+          <template #default="{ row }">
+            <el-button size="small" @click="open(row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="remove(row)">删除</el-button>
+          </template>
         </el-table-column>
       </el-table>
     </section>
@@ -22,6 +31,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { Plus } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])

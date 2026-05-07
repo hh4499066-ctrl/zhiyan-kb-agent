@@ -1,14 +1,20 @@
 <template>
   <div class="page">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">文档管理</h2>
+        <p class="page-subtitle">上传、解析并向量化企业知识文档。</p>
+      </div>
+      <el-upload :http-request="upload" :show-file-list="false">
+        <el-button type="primary"><el-icon><Upload /></el-icon>上传文档</el-button>
+      </el-upload>
+    </div>
     <div class="toolbar">
       <el-select v-model="spaceId" placeholder="知识空间" style="width:220px" @change="load">
         <el-option v-for="s in spaces" :key="s.id" :label="s.name" :value="s.id" />
       </el-select>
-      <el-upload :http-request="upload" :show-file-list="false">
-        <el-button type="primary">上传文档</el-button>
-      </el-upload>
       <el-button type="success" @click="router.push({ path: '/chat', query: { spaceId } })">空间问答</el-button>
-      <el-button @click="load">刷新</el-button>
+      <el-button @click="load"><el-icon><Refresh /></el-icon>刷新</el-button>
     </div>
     <section class="panel">
       <el-table :data="rows" stripe>
@@ -30,7 +36,10 @@
     </section>
     <el-drawer v-model="drawer" size="46%" :title="drawerTitle">
       <pre class="doc-text">{{ drawerText }}</pre>
-      <el-table v-if="chunkRows.length" :data="chunkRows"><el-table-column prop="chunkIndex" label="#" width="80" /><el-table-column prop="content" label="内容" /></el-table>
+      <el-table v-if="chunkRows.length" :data="chunkRows">
+        <el-table-column prop="chunkIndex" label="#" width="80" />
+        <el-table-column prop="content" label="内容" />
+      </el-table>
     </el-drawer>
   </div>
 </template>
@@ -39,6 +48,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Refresh, Upload } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const route = useRoute()
@@ -70,5 +80,9 @@ onMounted(async () => { await loadSpaces(); await load() })
 </script>
 
 <style scoped>
-.doc-text { white-space: pre-wrap; line-height: 1.8; color: #374151; }
+.doc-text {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: #374151;
+}
 </style>

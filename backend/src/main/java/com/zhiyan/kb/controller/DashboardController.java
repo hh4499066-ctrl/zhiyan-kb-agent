@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.entity.*;
 import com.zhiyan.kb.mapper.*;
+import com.zhiyan.kb.service.DashboardService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,15 +23,18 @@ public class DashboardController {
     private final ChatRecordMapper recordMapper;
     private final UnresolvedQuestionMapper unresolvedMapper;
     private final ChatFeedbackMapper feedbackMapper;
+    private final DashboardService dashboardService;
 
     public DashboardController(KbSpaceMapper spaceMapper, KbDocumentMapper documentMapper, KbDocumentChunkMapper chunkMapper,
-                               ChatRecordMapper recordMapper, UnresolvedQuestionMapper unresolvedMapper, ChatFeedbackMapper feedbackMapper) {
+                               ChatRecordMapper recordMapper, UnresolvedQuestionMapper unresolvedMapper, ChatFeedbackMapper feedbackMapper,
+                               DashboardService dashboardService) {
         this.spaceMapper = spaceMapper;
         this.documentMapper = documentMapper;
         this.chunkMapper = chunkMapper;
         this.recordMapper = recordMapper;
         this.unresolvedMapper = unresolvedMapper;
         this.feedbackMapper = feedbackMapper;
+        this.dashboardService = dashboardService;
     }
 
     @GetMapping("/overview")
@@ -38,7 +42,11 @@ public class DashboardController {
         long qaCount = recordMapper.selectCount(null);
         long helpful = feedbackMapper.selectCount(new LambdaQueryWrapper<ChatFeedback>().eq(ChatFeedback::getHelpful, true));
         long feedback = feedbackMapper.selectCount(null);
-        List<ChatRecord> topQuestions = recordMapper.selectList(new LambdaQueryWrapper<ChatRecord>().orderByDesc(ChatRecord::getCreateTime).last("limit 10"));
+        List<ChatRecord> topQuestionRecords = recordMapper.selectList(new LambdaQueryWrapper<ChatRecord>()
+                .select(ChatRecord::getQuestion, ChatRecord::getCreateTime)
+                .isNotNull(ChatRecord::getQuestion)
+                .orderByDesc(ChatRecord::getCreateTime));
+        List<Map<String, Object>> topQuestions = dashboardService.topQuestions(topQuestionRecords);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("spaceCount", spaceMapper.selectCount(new LambdaQueryWrapper<KbSpace>().ne(KbSpace::getStatus, "DELETED")));
         data.put("documentCount", documentMapper.selectCount(new LambdaQueryWrapper<KbDocument>().eq(KbDocument::getStatus, "NORMAL")));
@@ -46,7 +54,7 @@ public class DashboardController {
         data.put("qaCount", qaCount);
         data.put("todayQaCount", recordMapper.selectCount(new LambdaQueryWrapper<ChatRecord>().ge(ChatRecord::getCreateTime, LocalDate.now().atStartOfDay())));
         data.put("unresolvedCount", unresolvedMapper.selectCount(new LambdaQueryWrapper<UnresolvedQuestion>().eq(UnresolvedQuestion::getStatus, "PENDING")));
-        data.put("topQuestions", topQuestions.stream().map(ChatRecord::getQuestion).toList());
+        data.put("topQuestions", topQuestions);
         data.put("qaTrend", List.of(Map.of("date", "周一", "count", 12), Map.of("date", "周二", "count", 18), Map.of("date", "周三", "count", qaCount)));
         data.put("documentTrend", List.of(Map.of("date", "周一", "count", 2), Map.of("date", "周二", "count", 5), Map.of("date", "周三", "count", 8)));
         data.put("departmentContribution", List.of(Map.of("name", "研发部", "count", 8), Map.of("name", "测试部", "count", 3), Map.of("name", "运维部", "count", 4)));

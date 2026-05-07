@@ -1,6 +1,12 @@
 <template>
   <div class="page">
-    <div class="toolbar"><el-button type="primary" @click="open()">新增部门</el-button></div>
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">部门管理</h2>
+        <p class="page-subtitle">维护组织结构，用于知识空间权限和统计归属。</p>
+      </div>
+      <el-button type="primary" @click="open()"><el-icon><Plus /></el-icon>新增部门</el-button>
+    </div>
     <section class="panel">
       <el-table :data="rows" row-key="id">
         <el-table-column prop="name" label="部门名称" />
@@ -17,7 +23,7 @@
     <el-dialog v-model="visible" title="部门" width="480px">
       <el-form label-width="80px">
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="上级ID"><el-input-number v-model="form.parentId" :min="0" /></el-form-item>
+        <el-form-item label="上级 ID"><el-input-number v-model="form.parentId" :min="0" /></el-form-item>
         <el-form-item label="描述"><el-input v-model="form.description" type="textarea" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="visible=false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template>
@@ -27,6 +33,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { Plus } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])

@@ -1,6 +1,12 @@
 <template>
   <div class="page">
-    <div class="toolbar"><el-button @click="load">刷新</el-button></div>
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">问答记录</h2>
+        <p class="page-subtitle">审计问答内容、置信度和用户反馈。</p>
+      </div>
+      <el-button @click="load"><el-icon><Refresh /></el-icon>刷新</el-button>
+    </div>
     <section class="panel">
       <el-table :data="rows">
         <el-table-column prop="question" label="问题" min-width="220" />
@@ -21,10 +27,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])
 async function load() { rows.value = await http.get('/chat/records') }
-async function feedback(row: any, helpful: boolean) { await http.post(`/chat/records/${row.id}/feedback`, { helpful, comment: helpful ? '有帮助' : '需要补充' }); ElMessage.success('已反馈') }
+async function feedback(row: any, helpful: boolean) {
+  await http.post(`/chat/records/${row.id}/feedback`, { helpful, comment: helpful ? '有帮助' : '需要补充' })
+  ElMessage.success('已反馈')
+}
 onMounted(load)
 </script>

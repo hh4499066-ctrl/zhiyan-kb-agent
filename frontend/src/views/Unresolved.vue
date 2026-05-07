@@ -1,8 +1,19 @@
 <template>
   <div class="page">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">未解决问题</h2>
+        <p class="page-subtitle">沉淀无法回答的问题，驱动知识补齐。</p>
+      </div>
+      <el-button @click="load"><el-icon><Refresh /></el-icon>刷新</el-button>
+    </div>
     <div class="toolbar">
-      <el-select v-model="status" style="width:180px" @change="load"><el-option label="全部" value="" /><el-option label="待处理" value="PENDING" /><el-option label="已解决" value="RESOLVED" /><el-option label="已忽略" value="IGNORED" /></el-select>
-      <el-button @click="load">刷新</el-button>
+      <el-select v-model="status" style="width:180px" @change="load">
+        <el-option label="全部" value="" />
+        <el-option label="待处理" value="PENDING" />
+        <el-option label="已解决" value="RESOLVED" />
+        <el-option label="已忽略" value="IGNORED" />
+      </el-select>
     </div>
     <section class="panel">
       <el-table :data="rows">
@@ -22,6 +33,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])

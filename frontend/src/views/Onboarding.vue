@@ -1,11 +1,20 @@
 <template>
   <div class="page">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">新人助手</h2>
+        <p class="page-subtitle">基于知识库生成岗位学习路径和推荐文档。</p>
+      </div>
+    </div>
     <section class="panel">
       <div class="toolbar">
         <el-select v-model="roleType" style="width:200px">
           <el-option v-for="r in roles" :key="r" :label="r" :value="r" />
         </el-select>
-        <el-button type="primary" :loading="loading" @click="generate">生成学习路径</el-button>
+        <el-button type="primary" :loading="loading" @click="generate">
+          <el-icon><Guide /></el-icon>
+          生成学习路径
+        </el-button>
       </div>
       <el-empty v-if="!plan" description="请选择岗位并生成新人学习计划" />
       <div v-else>
@@ -20,6 +29,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Guide } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const roles = ['后端', '前端', '测试', '运维', '产品']
@@ -34,5 +44,12 @@ async function generate() {
 </script>
 
 <style scoped>
-.plan { white-space: pre-wrap; line-height: 1.9; font-size: 15px; background:#f8fafc; padding:16px; border-radius:8px; }
+.plan {
+  white-space: pre-wrap;
+  line-height: 1.9;
+  font-size: 15px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+}
 </style>
