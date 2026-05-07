@@ -7,17 +7,25 @@
       </div>
       <el-button type="primary" @click="open()"><el-icon><Plus /></el-icon>新增记忆</el-button>
     </div>
-    <section class="panel">
-      <el-table :data="rows">
-        <el-table-column prop="memoryType" label="类型" width="160" />
-        <el-table-column prop="content" label="内容" />
-        <el-table-column label="操作" width="160">
+    <section v-loading="loading" class="panel">
+      <el-table :data="pagedRows">
+        <el-table-column label="类型" width="160">
+          <template #default="{ row }"><StatusTag :value="row.memoryType" /></template>
+        </el-table-column>
+        <el-table-column prop="content" label="内容" min-width="260" show-overflow-tooltip />
+        <el-table-column label="操作" width="104" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="open(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="remove(row)">删除</el-button>
+            <div class="table-actions">
+              <ActionIconButton tooltip="编辑" :icon="Edit" @click="open(row)" />
+              <ActionIconButton tooltip="删除" :icon="Delete" type="danger" @click="remove(row)" />
+            </div>
           </template>
         </el-table-column>
       </el-table>
+      <div class="table-footer">
+        <span>共 {{ rows.length }} 条记忆</span>
+        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" layout="total, sizes, prev, pager, next" :total="rows.length" />
+      </div>
     </section>
     <el-dialog v-model="visible" title="长期记忆" width="540px">
       <el-form label-width="80px">
@@ -30,15 +38,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Delete, Edit, Plus } from '@element-plus/icons-vue'
+import ActionIconButton from '../components/ActionIconButton.vue'
+import StatusTag from '../components/StatusTag.vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])
+const page = ref(1)
+const pageSize = ref(10)
+const loading = ref(false)
 const visible = ref(false)
 const form = reactive<any>({})
 const types = ['PREFERENCE', 'IDENTITY', 'PROJECT', 'OTHER']
-async function load() { rows.value = await http.get('/memories') }
+const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+async function load() { loading.value = true; try { rows.value = await http.get('/memories'); page.value = 1 } finally { loading.value = false } }
 function open(row?: any) { Object.keys(form).forEach((k) => delete form[k]); Object.assign(form, row || { memoryType: 'PREFERENCE' }); visible.value = true }
 async function save() { form.id ? await http.put(`/memories/${form.id}`, form) : await http.post('/memories', form); visible.value = false; await load() }
 async function remove(row: any) { await http.delete(`/memories/${row.id}`); await load() }

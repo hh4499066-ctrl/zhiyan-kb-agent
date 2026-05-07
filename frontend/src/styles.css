@@ -83,6 +83,23 @@ a,
   backdrop-filter: blur(16px);
 }
 
+.table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -171,10 +188,18 @@ a,
   border-radius: 8px;
 }
 
+.el-table .el-table__header-wrapper th {
+  font-weight: 750;
+}
+
 .el-card {
   border-radius: 8px;
   border-color: rgba(214, 229, 234, 0.92);
   box-shadow: var(--shadow-soft);
+}
+
+.el-tag {
+  font-weight: 750;
 }
 
 .el-dialog,

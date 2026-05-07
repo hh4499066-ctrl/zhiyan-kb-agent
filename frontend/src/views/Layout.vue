@@ -168,6 +168,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   border-radius: 8px;
   color: #536174;
   font-weight: 650;
+  transition: color 200ms ease, background-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
 }
 
 .nav-menu :deep(.el-menu-item.is-active) {
@@ -178,6 +179,8 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 .nav-menu :deep(.el-menu-item:hover) {
   color: #079989;
   background: #f1fbf9;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(16, 182, 166, 0.1);
 }
 
 .aside-footer {

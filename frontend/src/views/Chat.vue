@@ -276,6 +276,8 @@ onMounted(async () => {
   padding: 14px;
   border-top: 1px solid #e4edf1;
   background: rgba(248, 252, 252, 0.9);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+  z-index: 1;
 }
 
 .refs {

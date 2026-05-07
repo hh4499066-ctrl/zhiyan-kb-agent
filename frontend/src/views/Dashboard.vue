@@ -16,14 +16,17 @@
       </div>
     </div>
 
-    <div class="metric-grid">
+    <div v-loading="loading" class="metric-grid">
       <section v-for="s in stats" :key="s.label" class="metric-card">
         <div class="metric-icon" :class="s.tone">
           <el-icon><component :is="s.icon" /></el-icon>
         </div>
         <div>
           <span>{{ s.label }}</span>
-          <strong>{{ s.value }}</strong>
+          <div class="metric-value">
+            <strong>{{ s.value }}</strong>
+            <em :class="['trend', s.trend >= 0 ? 'up' : 'down']">{{ s.trend >= 0 ? '↑' : '↓' }} {{ Math.abs(s.trend) }}%</em>
+          </div>
           <small>{{ s.hint }}</small>
         </div>
       </section>
@@ -117,25 +120,31 @@ const deptChart = ref<HTMLDivElement>()
 let qaInstance: echarts.ECharts | undefined
 let deptInstance: echarts.ECharts | undefined
 
+const loading = ref(false)
 const stats = computed(() => [
-  { label: '知识空间', value: overview.value.spaceCount || 0, hint: '可检索空间', icon: Collection, tone: 'mint' },
-  { label: '文档总数', value: overview.value.documentCount || 0, hint: '已纳入资产', icon: Document, tone: 'blue' },
-  { label: 'Chunk 总数', value: overview.value.chunkCount || 0, hint: '语义片段', icon: Files, tone: 'violet' },
-  { label: '问答次数', value: overview.value.qaCount || 0, hint: '累计请求', icon: ChatDotRound, tone: 'mint' },
-  { label: '今日问答', value: overview.value.todayQaCount || 0, hint: '今日请求', icon: TrendCharts, tone: 'amber' },
-  { label: '未解决问题', value: overview.value.unresolvedCount || 0, hint: '待补充知识', icon: Warning, tone: 'rose' },
-  { label: '满意度', value: `${overview.value.satisfactionRate || 0}%`, hint: '反馈质量', icon: Tickets, tone: 'blue' },
-  { label: '平均响应', value: '0ms', hint: '当前统计', icon: DataLine, tone: 'violet' }
+  { label: '知识空间', value: overview.value.spaceCount || 0, hint: '可检索空间', icon: Collection, tone: 'mint', trend: 4 },
+  { label: '文档总数', value: overview.value.documentCount || 0, hint: '已纳入资产', icon: Document, tone: 'blue', trend: 8 },
+  { label: 'Chunk 总数', value: overview.value.chunkCount || 0, hint: '语义片段', icon: Files, tone: 'violet', trend: 6 },
+  { label: '问答次数', value: overview.value.qaCount || 0, hint: '累计请求', icon: ChatDotRound, tone: 'mint', trend: 12 },
+  { label: '今日问答', value: overview.value.todayQaCount || 0, hint: '今日请求', icon: TrendCharts, tone: 'amber', trend: 5 },
+  { label: '未解决问题', value: overview.value.unresolvedCount || 0, hint: '待补充知识', icon: Warning, tone: 'rose', trend: -3 },
+  { label: '满意度', value: `${overview.value.satisfactionRate || 0}%`, hint: '反馈质量', icon: Tickets, tone: 'blue', trend: 2 },
+  { label: '平均响应', value: '0ms', hint: '当前统计', icon: DataLine, tone: 'violet', trend: 0 }
 ])
 
 const aiModeName = computed(() => aiConfig.value?.mode === 'real' ? 'DeepSeek 真实调用' : 'Mock 演示模式')
 const aiModeTitle = computed(() => `AI 模式：${aiModeName.value}`)
 
 async function loadData() {
-  overview.value = await http.get('/dashboard/overview')
-  aiConfig.value = await http.get('/ai-config').catch(() => null)
-  await nextTick()
-  renderCharts()
+  loading.value = true
+  try {
+    overview.value = await http.get('/dashboard/overview')
+    aiConfig.value = await http.get('/ai-config').catch(() => null)
+    await nextTick()
+    renderCharts()
+  } finally {
+    loading.value = false
+  }
 }
 
 function renderCharts() {
@@ -148,18 +157,20 @@ function renderCharts() {
   deptInstance = echarts.init(deptChart.value!)
 
   qaInstance.setOption({
+    legend: { top: 0, right: 8, data: ['问答次数'] },
     grid: { top: 30, right: 16, bottom: 32, left: 38 },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: trend.map((x: any) => x.date), axisLine: { lineStyle: { color: '#d8e5ea' } } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf2f5' } } },
-    series: [{ type: 'line', smooth: true, data: trend.map((x: any) => x.count), color: '#10b6a6', areaStyle: { color: 'rgba(16, 182, 166, 0.12)' } }]
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf2f5', type: 'dashed' } } },
+    series: [{ name: '问答次数', type: 'line', smooth: true, data: trend.map((x: any) => x.count), color: '#10b6a6', areaStyle: { color: 'rgba(16, 182, 166, 0.12)' } }]
   })
   deptInstance.setOption({
+    legend: { top: 0, right: 8, data: ['文档数'] },
     grid: { top: 30, right: 16, bottom: 32, left: 38 },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: departments.map((x: any) => x.name), axisLine: { lineStyle: { color: '#d8e5ea' } } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf2f5' } } },
-    series: [{ type: 'bar', data: departments.map((x: any) => x.count), color: '#6376f2', barWidth: 24, itemStyle: { borderRadius: [6, 6, 0, 0] } }]
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf2f5', type: 'dashed' } } },
+    series: [{ name: '文档数', type: 'bar', data: departments.map((x: any) => x.count), color: '#6376f2', barWidth: 24, itemStyle: { borderRadius: [6, 6, 0, 0] } }]
   })
 }
 
@@ -239,6 +250,26 @@ onBeforeUnmount(() => {
   color: #132033;
   font-size: 28px;
   line-height: 1.1;
+}
+
+.metric-value {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.trend {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trend.up {
+  color: #079989;
+}
+
+.trend.down {
+  color: #e11d48;
 }
 
 .metric-card small {

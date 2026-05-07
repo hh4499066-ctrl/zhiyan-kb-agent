@@ -15,30 +15,42 @@
         <el-option label="已忽略" value="IGNORED" />
       </el-select>
     </div>
-    <section class="panel">
-      <el-table :data="rows">
-        <el-table-column prop="question" label="问题" />
-        <el-table-column prop="reason" label="原因" />
-        <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column label="操作" width="220">
+    <section v-loading="loading" class="panel">
+      <el-table :data="pagedRows">
+        <el-table-column prop="question" label="问题" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="reason" label="原因" min-width="220" show-overflow-tooltip />
+        <el-table-column label="状态" width="116"><template #default="{ row }"><StatusTag :value="row.status" /></template></el-table-column>
+        <el-table-column label="操作" width="104" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="resolve(row)">标记已解决</el-button>
-            <el-button size="small" @click="ignore(row)">忽略</el-button>
+            <div class="table-actions">
+              <ActionIconButton tooltip="标记已解决" :icon="CircleCheck" @click="resolve(row)" />
+              <ActionIconButton tooltip="忽略" :icon="Remove" type="warning" @click="ignore(row)" />
+            </div>
           </template>
         </el-table-column>
       </el-table>
+      <div class="table-footer">
+        <span>共 {{ rows.length }} 条问题</span>
+        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" layout="total, sizes, prev, pager, next" :total="rows.length" />
+      </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { computed, onMounted, ref } from 'vue'
+import { CircleCheck, Refresh, Remove } from '@element-plus/icons-vue'
+import ActionIconButton from '../components/ActionIconButton.vue'
+import StatusTag from '../components/StatusTag.vue'
 import { http } from '../api'
 
 const rows = ref<any[]>([])
 const status = ref('')
-async function load() { rows.value = await http.get('/unresolved', { params: { status: status.value || undefined } }) }
+const page = ref(1)
+const pageSize = ref(10)
+const loading = ref(false)
+const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+async function load() { loading.value = true; try { rows.value = await http.get('/unresolved', { params: { status: status.value || undefined } }); page.value = 1 } finally { loading.value = false } }
 async function resolve(row: any) { await http.put(`/unresolved/${row.id}/resolve`, { resolveNote: '已补充或关联知识文档' }); await load() }
 async function ignore(row: any) { await http.put(`/unresolved/${row.id}/ignore`); await load() }
 onMounted(load)

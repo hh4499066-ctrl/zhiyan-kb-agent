@@ -15,24 +15,32 @@
       </el-select>
       <el-button type="success" @click="router.push({ path: '/chat', query: { spaceId } })">空间问答</el-button>
       <el-button @click="load"><el-icon><Refresh /></el-icon>刷新</el-button>
+      <el-button type="danger" :disabled="!selectedRows.length" @click="removeSelected"><el-icon><Delete /></el-icon>批量删除</el-button>
     </div>
-    <section class="panel">
-      <el-table :data="rows" stripe>
-        <el-table-column prop="title" label="标题" min-width="180" />
+    <section v-loading="loading" class="panel">
+      <el-table :data="pagedRows" stripe @selection-change="selectedRows = $event">
+        <el-table-column type="selection" width="46" />
+        <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
         <el-table-column prop="fileType" label="类型" width="80" />
-        <el-table-column prop="parseStatus" label="解析" width="100" />
-        <el-table-column prop="vectorStatus" label="向量" width="100" />
-        <el-table-column prop="keywords" label="关键词" />
-        <el-table-column label="操作" width="360">
+        <el-table-column label="解析" width="116"><template #default="{ row }"><StatusTag :value="row.parseStatus" /></template></el-table-column>
+        <el-table-column label="向量" width="124"><template #default="{ row }"><StatusTag :value="row.vectorStatus" /></template></el-table-column>
+        <el-table-column prop="keywords" label="关键词" min-width="150" show-overflow-tooltip />
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="detail(row)">详情</el-button>
-            <el-button size="small" @click="chunks(row)">Chunk</el-button>
-            <el-button size="small" @click="summary(row)">AI 摘要</el-button>
-            <el-button size="small" @click="faq(row)">生成 FAQ</el-button>
-            <el-button size="small" type="danger" @click="remove(row)">删除</el-button>
+            <div class="table-actions">
+              <ActionIconButton tooltip="详情" :icon="View" @click="detail(row)" />
+              <ActionIconButton tooltip="Chunk" :icon="Files" type="info" @click="chunks(row)" />
+              <ActionIconButton tooltip="AI 摘要" :icon="Memo" type="success" @click="summary(row)" />
+              <ActionIconButton tooltip="生成 FAQ" :icon="Tickets" type="warning" @click="faq(row)" />
+              <ActionIconButton tooltip="删除" :icon="Delete" type="danger" @click="remove(row)" />
+            </div>
           </template>
         </el-table-column>
       </el-table>
+      <div class="table-footer">
+        <span>已选择 {{ selectedRows.length }} 项</span>
+        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" layout="total, sizes, prev, pager, next" :total="rows.length" />
+      </div>
     </section>
     <el-drawer v-model="drawer" size="46%" :title="drawerTitle">
       <pre class="doc-text">{{ drawerText }}</pre>
@@ -45,24 +53,31 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Refresh, Upload } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Files, Memo, Refresh, Tickets, Upload, View } from '@element-plus/icons-vue'
+import ActionIconButton from '../components/ActionIconButton.vue'
+import StatusTag from '../components/StatusTag.vue'
 import { http } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 const spaces = ref<any[]>([])
 const rows = ref<any[]>([])
+const selectedRows = ref<any[]>([])
+const page = ref(1)
+const pageSize = ref(10)
+const loading = ref(false)
 const spaceId = ref<number>()
 const drawer = ref(false)
 const drawerTitle = ref('')
 const drawerText = ref('')
 const chunkRows = ref<any[]>([])
+const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 
 async function loadSpaces() { spaces.value = await http.get('/spaces'); if (!spaceId.value) spaceId.value = Number(route.query.spaceId || spaces.value[0]?.id) }
-async function load() { rows.value = await http.get('/documents', { params: { spaceId: spaceId.value } }) }
+async function load() { loading.value = true; try { rows.value = await http.get('/documents', { params: { spaceId: spaceId.value } }); page.value = 1 } finally { loading.value = false } }
 async function upload(option: any) {
   const fd = new FormData()
   fd.append('file', option.file)
@@ -76,6 +91,12 @@ async function chunks(row: any) { drawerTitle.value = `${row.title} - Chunk`; dr
 async function summary(row: any) { const data = await http.post(`/documents/${row.id}/ai-summary`); drawerTitle.value = 'AI 摘要'; drawerText.value = data.summary; chunkRows.value = []; drawer.value = true; await load() }
 async function faq(row: any) { await http.post(`/documents/${row.id}/generate-faq`); ElMessage.success('FAQ 已生成') }
 async function remove(row: any) { await http.delete(`/documents/${row.id}`); await load() }
+async function removeSelected() {
+  await ElMessageBox.confirm(`确认删除选中的 ${selectedRows.value.length} 个文档？`, '批量删除', { type: 'warning' })
+  for (const row of selectedRows.value) await http.delete(`/documents/${row.id}`)
+  selectedRows.value = []
+  await load()
+}
 onMounted(async () => { await loadSpaces(); await load() })
 </script>
 
