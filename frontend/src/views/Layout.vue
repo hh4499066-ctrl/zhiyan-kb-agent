@@ -1,24 +1,39 @@
 <template>
   <el-container class="shell">
-    <el-aside class="aside" width="252px">
+    <el-aside
+      :class="['aside', isMainNavCollapse ? 'aside-collapsed' : '']"
+      :width="isMainNavCollapse ? '64px' : '252px'"
+    >
       <div class="logo">
         <div class="logo-mark">Z</div>
-        <div>
+        <div class="logo-copy">
           <strong>智研知识库</strong>
           <span>AI Knowledge Base</span>
         </div>
       </div>
-      <el-menu class="nav-menu" router :default-active="$route.path">
+      <el-menu
+        class="nav-menu"
+        router
+        :default-active="$route.path"
+        :collapse="isMainNavCollapse"
+        :collapse-transition="false"
+      >
         <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
         </el-menu-item>
       </el-menu>
       <div class="aside-footer">
-        <div class="mini-card">
+        <div v-if="!isMainNavCollapse" class="mini-card">
           <span>知识库健康度</span>
           <strong>98%</strong>
         </div>
+        <button class="main-nav-toggle" type="button" @click="isMainNavCollapse = !isMainNavCollapse">
+          <el-icon>
+            <Expand v-if="isMainNavCollapse" />
+            <Fold v-else />
+          </el-icon>
+        </button>
       </div>
     </el-aside>
 
@@ -55,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   ArrowDown,
   ChatDotRound,
@@ -63,6 +78,8 @@ import {
   Collection,
   DataBoard,
   Document,
+  Expand,
+  Fold,
   Guide,
   Memo,
   Notebook,
@@ -74,6 +91,7 @@ import {
 import { useAuthStore } from '../store'
 
 const auth = useAuthStore()
+const isMainNavCollapse = ref(false)
 const allMenus = [
   { path: '/dashboard', title: '仪表盘', icon: DataBoard },
   { path: '/users', title: '用户管理', icon: User, roles: ['admin'] },
@@ -113,9 +131,12 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   height: 100vh;
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
   border-right: 1px solid #e1edf1;
   background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(18px);
+  overflow: hidden;
+  transition: width 0.3s ease;
 }
 
 .logo {
@@ -125,6 +146,8 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   gap: 14px;
   padding: 0 22px;
   color: #071426;
+  overflow: hidden;
+  transition: padding 0.3s ease, justify-content 0.3s ease;
 }
 
 .logo-mark {
@@ -145,6 +168,13 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   display: block;
 }
 
+.logo-copy {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, width 0.3s ease;
+}
+
 .logo strong {
   font-size: 18px;
 }
@@ -160,6 +190,15 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   border-right: 0;
   padding: 10px 12px;
   background: transparent;
+  transition: width 0.3s ease, padding 0.3s ease;
+}
+
+.nav-menu:not(.el-menu--collapse) {
+  width: 100%;
+}
+
+.nav-menu.el-menu--collapse {
+  width: 64px;
 }
 
 .nav-menu :deep(.el-menu-item) {
@@ -184,8 +223,12 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 }
 
 .aside-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 16px;
   border-top: 1px solid #e6eef2;
+  transition: padding 0.3s ease;
 }
 
 .mini-card {
@@ -205,8 +248,51 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   font-size: 18px;
 }
 
+.main-nav-toggle {
+  width: 100%;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dbe9ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #536174;
+  transition: border-color 200ms ease, color 200ms ease, background-color 200ms ease;
+}
+
+.main-nav-toggle:hover {
+  border-color: #10b6a6;
+  background: #effbf8;
+  color: #079989;
+}
+
+.aside-collapsed .logo {
+  justify-content: center;
+  padding: 0;
+}
+
+.aside-collapsed .logo-copy {
+  width: 0;
+  opacity: 0;
+}
+
+.aside-collapsed .nav-menu {
+  padding: 10px 0;
+}
+
+.aside-collapsed .nav-menu :deep(.el-menu-item) {
+  justify-content: center;
+  padding: 0 !important;
+}
+
+.aside-collapsed .aside-footer {
+  padding: 12px;
+}
+
 .content-shell {
+  flex: 1 1 auto;
   min-width: 0;
+  transition: flex-grow 0.3s ease;
 }
 
 .header {

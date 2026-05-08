@@ -1,5 +1,5 @@
 <template>
-  <div class="page chat-page">
+  <div :class="['page chat-page', isChatSidebarCollapse ? 'chat-sidebar-collapsed' : '']">
     <aside class="panel sessions">
       <el-button type="primary" class="full" @click="newSession">
         <el-icon><Plus /></el-icon>
@@ -32,6 +32,13 @@
         <el-empty v-if="!sessions.length" description="暂无历史" :image-size="70" />
       </div>
     </aside>
+
+    <button class="chat-sidebar-toggle" type="button" @click="isChatSidebarCollapse = !isChatSidebarCollapse">
+      <el-icon>
+        <ArrowRight v-if="isChatSidebarCollapse" />
+        <ArrowLeft v-else />
+      </el-icon>
+    </button>
 
     <section class="chat-main panel">
       <div class="chat-topline">
@@ -70,7 +77,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Delete, Plus, Promotion } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Delete, Plus, Promotion } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const route = useRoute()
@@ -82,6 +89,7 @@ const question = ref('')
 const loading = ref(false)
 const messages = ref<any[]>([])
 const viewingHistory = ref(false)
+const isChatSidebarCollapse = ref(false)
 const inputPlaceholder = computed(() => viewingHistory.value ? '' : '请输入你的问题，例如：项目启动失败怎么处理？')
 
 function newSession() {
@@ -155,16 +163,81 @@ onMounted(async () => {
 
 <style scoped>
 .chat-page {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  --chat-sidebar-width: 320px;
+  --chat-sidebar-panel-padding: 18px;
+  --chat-sidebar-toggle-width: 32px;
+  --chat-sidebar-toggle-overlap: 8px;
+  position: relative;
+  display: flex;
   gap: 18px;
   height: calc(100vh - 78px);
   min-height: 640px;
+  transition: gap 0.3s ease;
+}
+
+.chat-sidebar-collapsed {
+  gap: 0;
 }
 
 .sessions {
+  position: relative;
+  z-index: 11;
+  width: 320px;
+  flex: 0 0 320px;
   min-height: 0;
   overflow: auto;
+  transition: width 0.3s ease, flex-basis 0.3s ease, padding 0.3s ease, border-width 0.3s ease, opacity 0.2s ease;
+}
+
+.chat-sidebar-collapsed .sessions {
+  width: 0;
+  flex-basis: 0;
+  min-width: 0;
+  padding-right: 0;
+  padding-left: 0;
+  border-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.chat-sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--chat-sidebar-width) + var(--chat-sidebar-panel-padding) - var(--chat-sidebar-toggle-overlap));
+  z-index: 10;
+  width: var(--chat-sidebar-toggle-width);
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  background: #fff;
+  color: #536174;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-50%);
+  transition: left 0.3s ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease;
+}
+
+.chat-sidebar-toggle .el-icon {
+  transform: translateX(4px);
+}
+
+.chat-sidebar-toggle:hover {
+  border-color: #10b6a6;
+  color: #079989;
+  box-shadow: 0 4px 12px rgba(16, 182, 166, 0.22);
+}
+
+.chat-sidebar-collapsed .chat-sidebar-toggle {
+  left: 0;
+  width: calc(var(--chat-sidebar-toggle-width) - var(--chat-sidebar-toggle-overlap));
+}
+
+.chat-sidebar-collapsed .chat-sidebar-toggle .el-icon {
+  transform: none;
 }
 
 .full {
@@ -234,9 +307,12 @@ onMounted(async () => {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 14px;
+  flex: 1 1 auto;
+  width: 0;
   min-height: 0;
   padding: 0;
   overflow: hidden;
+  transition: flex-grow 0.3s ease, width 0.3s ease;
 }
 
 .chat-topline {
@@ -290,8 +366,29 @@ onMounted(async () => {
 
 @media (max-width: 900px) {
   .chat-page {
-    grid-template-columns: 1fr;
+    display: block;
     height: auto;
+  }
+
+  .sessions {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .chat-main {
+    width: auto;
+  }
+
+  .chat-sidebar-collapsed .sessions {
+    width: 0;
+    height: 0;
+    margin-bottom: 0;
+  }
+
+  .chat-sidebar-toggle,
+  .chat-sidebar-collapsed .chat-sidebar-toggle {
+    top: 50%;
+    left: 100%;
   }
 
   .input {
