@@ -30,7 +30,7 @@ public class LongTermMemoryService {
         return list(userId).stream()
                 .sorted(Comparator.comparingDouble((UserLongTermMemory m) -> keywordSearchService.score(question, m.getContent())).reversed())
                 .limit(topK)
-                .map(UserLongTermMemory::getContent)
+                .map(m -> "[" + m.getMemoryType() + "] " + m.getContent())
                 .toList();
     }
 }

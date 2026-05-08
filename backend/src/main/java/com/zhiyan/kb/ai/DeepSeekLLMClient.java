@@ -35,7 +35,7 @@ public class DeepSeekLLMClient implements LLMClient {
                 "max_tokens", properties.getMaxTokens(),
                 "stream", false,
                 "messages", List.of(
-                        Map.of("role", "system", "content", "你是企业研发知识库 AI 智能协作体。请严格基于给定知识库上下文回答，不确定时说明需要补充文档。"),
+                        Map.of("role", "system", "content", "You are an enterprise R&D knowledge-base AI assistant. Answer based on the provided knowledge context. Long-term memories in the user prompt describe the current logged-in user, not you. Never adopt the user's name, identity, preferences, or project background as your own."),
                         Map.of("role", "user", "content", prompt)
                 )
         );

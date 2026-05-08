@@ -10,6 +10,7 @@ import java.util.List;
 public class PromptBuilder {
     public String buildChatPrompt(String question, String rewrittenQuestion, List<String> longMemories, List<ChatMemoryMessage> shortMemory, List<RetrievalResult> retrievalResults) {
         StringBuilder sb = new StringBuilder();
+        sb.append("Memory ownership rule: long-term memories describe the current logged-in user only. If a memory says \"I\", \"me\", \"my\", or \"我的\", interpret it as the user's identity, preference, or project context, never as the AI assistant's own identity.\n");
         sb.append("系统角色：你是企业研发知识库 AI 智能协作体，必须优先依据企业内部知识片段回答，不允许编造。\n");
         sb.append("长期记忆：\n");
         longMemories.forEach(m -> sb.append("- ").append(m).append("\n"));

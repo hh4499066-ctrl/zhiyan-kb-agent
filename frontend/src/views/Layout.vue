@@ -2,7 +2,7 @@
   <el-container class="shell">
     <el-aside
       :class="['aside', isMainNavCollapse ? 'aside-collapsed' : '']"
-      :width="isMainNavCollapse ? '64px' : '252px'"
+      :width="isMainNavCollapse ? '76px' : '252px'"
     >
       <div class="logo">
         <div class="logo-mark">Z</div>
@@ -198,16 +198,36 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 }
 
 .nav-menu.el-menu--collapse {
-  width: 64px;
+  width: 76px;
 }
 
 .nav-menu :deep(.el-menu-item) {
   height: 48px;
   margin: 4px 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  justify-content: flex-start;
+  column-gap: 10px;
   border-radius: 8px;
   color: #536174;
   font-weight: 650;
-  transition: color 200ms ease, background-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+  padding: 0 12px !important;
+  transition: color 200ms ease, background-color 200ms ease, transform 200ms ease, box-shadow 200ms ease, padding 0.3s ease;
+}
+
+.nav-menu :deep(.el-menu-item .el-icon) {
+  width: 28px;
+  margin: 0;
+  transition: transform 0.3s ease;
+}
+
+.nav-menu :deep(.el-menu-item span) {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.18s ease 0.08s, transform 0.3s ease;
 }
 
 .nav-menu :deep(.el-menu-item.is-active) {
@@ -267,8 +287,8 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 }
 
 .aside-collapsed .logo {
-  justify-content: center;
-  padding: 0;
+  justify-content: flex-start;
+  padding: 0 17px;
 }
 
 .aside-collapsed .logo-copy {
@@ -277,12 +297,19 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 }
 
 .aside-collapsed .nav-menu {
-  padding: 10px 0;
+  padding: 10px 14px;
 }
 
 .aside-collapsed .nav-menu :deep(.el-menu-item) {
+  grid-template-columns: 28px 0;
   justify-content: center;
   padding: 0 !important;
+}
+
+.aside-collapsed .nav-menu :deep(.el-menu-item span) {
+  width: 0;
+  opacity: 0;
+  transform: translateX(-6px);
 }
 
 .aside-collapsed .aside-footer {
