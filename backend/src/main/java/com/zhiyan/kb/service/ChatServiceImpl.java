@@ -40,10 +40,12 @@ public class ChatServiceImpl implements ChatService {
     private final ChatRecordMapper chatRecordMapper;
     private final UnresolvedQuestionMapper unresolvedQuestionMapper;
     private final KbSpaceMapper spaceMapper;
+    private final ResourceAccessService accessService;
 
     public ChatServiceImpl(ShortTermMemoryService shortTermMemoryService, QueryRewriteService queryRewriteService, LongTermMemoryService longTermMemoryService,
                            HybridRetrievalService retrievalService, PromptBuilder promptBuilder, LLMClient llmClient, AIResponseParser responseParser,
-                           ChatRecordMapper chatRecordMapper, UnresolvedQuestionMapper unresolvedQuestionMapper, KbSpaceMapper spaceMapper) {
+                           ChatRecordMapper chatRecordMapper, UnresolvedQuestionMapper unresolvedQuestionMapper, KbSpaceMapper spaceMapper,
+                           ResourceAccessService accessService) {
         this.shortTermMemoryService = shortTermMemoryService;
         this.queryRewriteService = queryRewriteService;
         this.longTermMemoryService = longTermMemoryService;
@@ -54,6 +56,7 @@ public class ChatServiceImpl implements ChatService {
         this.chatRecordMapper = chatRecordMapper;
         this.unresolvedQuestionMapper = unresolvedQuestionMapper;
         this.spaceMapper = spaceMapper;
+        this.accessService = accessService;
     }
 
     @Override
@@ -64,6 +67,9 @@ public class ChatServiceImpl implements ChatService {
         String rewritten = queryRewriteService.rewrite(request.getQuestion(), context);
         List<String> longMemories = longTermMemoryService.recall(userId, rewritten, 3);
         Long scopeSpaceId = normalizeSpaceId(request.getSpaceId());
+        if (scopeSpaceId != null) {
+            accessService.requireSpaceAccess(scopeSpaceId);
+        }
         Long effectiveSpaceId = scopeSpaceId;
         int topK = request.getTopK() == null ? 5 : request.getTopK();
         List<RetrievalResult> retrievalResults = scopeSpaceId == null
@@ -111,11 +117,7 @@ public class ChatServiceImpl implements ChatService {
         }
         shortTermMemoryService.addMessage(sessionId, userId, "USER", request.getQuestion());
         shortTermMemoryService.addMessage(sessionId, userId, "ASSISTANT", answer);
-        if (effectiveSpaceId != null && spaceMapper.selectById(effectiveSpaceId) != null) {
-            spaceMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.zhiyan.kb.entity.KbSpace>()
-                    .eq(com.zhiyan.kb.entity.KbSpace::getId, effectiveSpaceId)
-                    .setSql("qa_count = qa_count + 1"));
-        }
+        incrementQaCount(effectiveSpaceId);
 
         ChatAskResponse response = new ChatAskResponse();
         response.setAnswer(answer);
@@ -137,6 +139,7 @@ public class ChatServiceImpl implements ChatService {
         return spaceMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbSpace>()
                         .eq(KbSpace::getStatus, "NORMAL"))
                 .stream()
+                .filter(space -> accessService.canAccessSpace(space.getId()))
                 .filter(space -> currentSpaceId == null || !space.getId().equals(currentSpaceId))
                 .flatMap(space -> retrievalService.search(space.getId(), question, topK, 0.5, FALLBACK_MIN_SCORE).stream())
                 .sorted(Comparator.comparingDouble(RetrievalResult::getFinalScore).reversed())
@@ -156,8 +159,20 @@ public class ChatServiceImpl implements ChatService {
             return scopeSpaceId;
         }
         KbSpace first = spaceMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbSpace>()
-                .eq(KbSpace::getStatus, "NORMAL")
-                .last("limit 1")).stream().findFirst().orElse(null);
+                .eq(KbSpace::getStatus, "NORMAL")).stream().findFirst().orElse(null);
         return first == null ? 0L : first.getId();
+    }
+
+    private void incrementQaCount(Long spaceId) {
+        if (spaceId == null) {
+            return;
+        }
+        KbSpace space = spaceMapper.selectById(spaceId);
+        if (space == null) {
+            return;
+        }
+        int current = space.getQaCount() == null ? 0 : space.getQaCount();
+        space.setQaCount(current + 1);
+        spaceMapper.updateById(space);
     }
 }

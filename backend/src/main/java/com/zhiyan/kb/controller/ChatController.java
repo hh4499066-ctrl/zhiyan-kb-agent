@@ -2,6 +2,7 @@ package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhiyan.kb.common.Result;
+import com.zhiyan.kb.common.RoleNames;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.dto.ChatAskRequest;
 import com.zhiyan.kb.entity.ChatFeedback;
@@ -11,10 +12,19 @@ import com.zhiyan.kb.mapper.ChatFeedbackMapper;
 import com.zhiyan.kb.mapper.ChatRecordMapper;
 import com.zhiyan.kb.mapper.ChatSessionMapper;
 import com.zhiyan.kb.service.ChatService;
+import com.zhiyan.kb.service.ResourceAccessService;
 import com.zhiyan.kb.service.ShortTermMemoryService;
 import com.zhiyan.kb.vo.ChatAskResponse;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,14 +39,17 @@ public class ChatController {
     private final ChatRecordMapper recordMapper;
     private final ChatFeedbackMapper feedbackMapper;
     private final ShortTermMemoryService memoryService;
+    private final ResourceAccessService accessService;
 
     public ChatController(ChatService chatService, ChatSessionMapper sessionMapper, ChatRecordMapper recordMapper,
-                          ChatFeedbackMapper feedbackMapper, ShortTermMemoryService memoryService) {
+                          ChatFeedbackMapper feedbackMapper, ShortTermMemoryService memoryService,
+                          ResourceAccessService accessService) {
         this.chatService = chatService;
         this.sessionMapper = sessionMapper;
         this.recordMapper = recordMapper;
         this.feedbackMapper = feedbackMapper;
         this.memoryService = memoryService;
+        this.accessService = accessService;
     }
 
     @PostMapping("/ask")
@@ -46,17 +59,18 @@ public class ChatController {
 
     @GetMapping("/sessions")
     public Result<List<Map<String, Object>>> sessions() {
-        LambdaQueryWrapper<ChatRecord> qw = new LambdaQueryWrapper<ChatRecord>().orderByDesc(ChatRecord::getCreateTime);
-        if (!"admin".equals(UserContext.role())) {
-            qw.eq(ChatRecord::getUserId, UserContext.userId());
+        LambdaQueryWrapper<ChatRecord> query = new LambdaQueryWrapper<ChatRecord>().orderByDesc(ChatRecord::getCreateTime);
+        if (!RoleNames.ADMIN.equals(UserContext.role())) {
+            query.eq(ChatRecord::getUserId, UserContext.userId());
         }
-        List<ChatRecord> records = recordMapper.selectList(qw);
+        List<ChatRecord> records = recordMapper.selectList(query);
         Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
         for (ChatRecord record : records) {
             grouped.computeIfAbsent(record.getSessionId(), sessionId -> {
                 Map<String, Object> session = new LinkedHashMap<>();
                 session.put("sessionId", sessionId);
-                session.put("title", record.getQuestion().length() > 18 ? record.getQuestion().substring(0, 18) + "..." : record.getQuestion());
+                String question = record.getQuestion() == null ? "New chat" : record.getQuestion();
+                session.put("title", question.length() > 18 ? question.substring(0, 18) + "..." : question);
                 session.put("spaceId", record.getSpaceId());
                 session.put("updateTime", record.getCreateTime());
                 return session;
@@ -69,7 +83,7 @@ public class ChatController {
     public Result<ChatSession> createSession(@RequestBody ChatSession session) {
         session.setUserId(UserContext.userId());
         session.setStatus("NORMAL");
-        session.setTitle(session.getTitle() == null ? "新会话" : session.getTitle());
+        session.setTitle(session.getTitle() == null ? "New chat" : session.getTitle());
         sessionMapper.insert(session);
         return Result.ok(session);
     }
@@ -78,14 +92,14 @@ public class ChatController {
     public Result<Void> deleteSession(@PathVariable String id) {
         if (id.matches("\\d+")) {
             ChatSession session = sessionMapper.selectById(Long.valueOf(id));
-            if (session != null) {
+            if (session != null && (RoleNames.ADMIN.equals(UserContext.role()) || UserContext.userId().equals(session.getUserId()))) {
                 session.setStatus("DELETED");
                 sessionMapper.updateById(session);
             }
         }
         recordMapper.delete(new LambdaQueryWrapper<ChatRecord>()
                 .eq(ChatRecord::getSessionId, id)
-                .eq(!"admin".equals(UserContext.role()), ChatRecord::getUserId, UserContext.userId()));
+                .eq(!RoleNames.ADMIN.equals(UserContext.role()), ChatRecord::getUserId, UserContext.userId()));
         memoryService.clearSession(id, UserContext.userId());
         return Result.ok();
     }
@@ -97,28 +111,30 @@ public class ChatController {
     }
 
     @GetMapping("/records")
-    public Result<List<ChatRecord>> records(@RequestParam(required = false) Long spaceId, @RequestParam(required = false) String sessionId) {
-        LambdaQueryWrapper<ChatRecord> qw = new LambdaQueryWrapper<ChatRecord>()
+    public Result<List<ChatRecord>> records(@RequestParam(required = false) Long spaceId,
+                                            @RequestParam(required = false) String sessionId) {
+        LambdaQueryWrapper<ChatRecord> query = new LambdaQueryWrapper<ChatRecord>()
                 .eq(spaceId != null, ChatRecord::getSpaceId, spaceId)
                 .eq(sessionId != null && !sessionId.isBlank(), ChatRecord::getSessionId, sessionId);
-        if (!"admin".equals(UserContext.role())) {
-            qw.eq(ChatRecord::getUserId, UserContext.userId());
+        if (!RoleNames.ADMIN.equals(UserContext.role())) {
+            query.eq(ChatRecord::getUserId, UserContext.userId());
         }
         if (sessionId != null && !sessionId.isBlank()) {
-            qw.orderByAsc(ChatRecord::getCreateTime);
+            query.orderByAsc(ChatRecord::getCreateTime);
         } else {
-            qw.orderByDesc(ChatRecord::getCreateTime);
+            query.orderByDesc(ChatRecord::getCreateTime);
         }
-        return Result.ok(recordMapper.selectList(qw));
+        return Result.ok(recordMapper.selectList(query));
     }
 
     @GetMapping("/records/{id}")
     public Result<ChatRecord> record(@PathVariable Long id) {
-        return Result.ok(recordMapper.selectById(id));
+        return Result.ok(accessService.requireChatRecord(id));
     }
 
     @PostMapping("/records/{id}/feedback")
     public Result<ChatFeedback> feedback(@PathVariable Long id, @RequestBody ChatFeedback feedback) {
+        accessService.requireChatRecord(id);
         feedback.setRecordId(id);
         feedback.setUserId(UserContext.userId());
         feedbackMapper.insert(feedback);
@@ -127,8 +143,7 @@ public class ChatController {
 
     @PutMapping("/records/{id}/favorite")
     public Result<Void> favorite(@PathVariable Long id, @RequestParam boolean favorite) {
-        ChatRecord record = new ChatRecord();
-        record.setId(id);
+        ChatRecord record = accessService.requireChatRecord(id);
         record.setFavorite(favorite);
         recordMapper.updateById(record);
         return Result.ok();

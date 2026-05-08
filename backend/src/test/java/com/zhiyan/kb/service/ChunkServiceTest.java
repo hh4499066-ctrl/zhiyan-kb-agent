@@ -6,7 +6,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ChunkServiceTest {
     @Test
-    void splitShouldUseFixedWindowWithOverlap() {
+    void splitShouldPreserveParagraphBoundariesWhenPossible() {
+        ChunkService service = new ChunkService(null, null, null);
+        String text = "Title\n\nFirst paragraph.\n\nSecond paragraph.";
+
+        var chunks = service.split(text);
+
+        assertThat(chunks).containsExactly("Title\n\nFirst paragraph.\n\nSecond paragraph.");
+    }
+
+    @Test
+    void splitLongBlockShouldUseFixedWindowWithOverlap() {
         ChunkService service = new ChunkService(null, null, null);
         String text = "a".repeat(1100);
 

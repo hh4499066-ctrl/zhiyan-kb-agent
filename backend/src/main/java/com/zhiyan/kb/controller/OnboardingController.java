@@ -1,6 +1,7 @@
 package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.UserContext;
@@ -29,7 +30,8 @@ public class OnboardingController {
     @PostMapping("/generate-plan")
     public Result<OnboardingPlan> generate(@RequestBody Map<String, String> body) {
         String roleType = body.getOrDefault("roleType", "后端");
-        List<KbDocument> docs = documentMapper.selectList(new LambdaQueryWrapper<KbDocument>().eq(KbDocument::getStatus, "NORMAL").last("limit 6"));
+        List<KbDocument> docs = documentMapper.selectPage(Page.of(1, 6),
+                new LambdaQueryWrapper<KbDocument>().eq(KbDocument::getStatus, "NORMAL")).getRecords();
         String planText = llmClient.complete("请为新人生成学习计划，岗位：" + roleType + "，推荐文档：" + docs.stream().map(KbDocument::getTitle).toList());
         OnboardingPlan plan = new OnboardingPlan();
         plan.setUserId(UserContext.userId());

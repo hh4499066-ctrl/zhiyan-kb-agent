@@ -52,20 +52,72 @@ public class ChunkService {
     }
 
     public List<String> split(String text) {
-        String clean = text == null ? "" : text.replaceAll("\\s+", " ").trim();
-        List<String> result = new ArrayList<>();
-        if (clean.isBlank()) {
-            return result;
+        String normalized = normalize(text);
+        List<String> blocks = structuralBlocks(normalized);
+        List<String> chunks = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        for (String block : blocks) {
+            if (block.length() > CHUNK_SIZE) {
+                flush(current, chunks);
+                chunks.addAll(splitLongBlock(block));
+                continue;
+            }
+            if (!current.isEmpty() && current.length() + block.length() + 2 > CHUNK_SIZE) {
+                flush(current, chunks);
+            }
+            if (!current.isEmpty()) {
+                current.append("\n\n");
+            }
+            current.append(block);
         }
+        flush(current, chunks);
+        return chunks;
+    }
+
+    private String normalize(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .replaceAll("[ \\t]+", " ")
+                .trim();
+    }
+
+    private List<String> structuralBlocks(String text) {
+        List<String> blocks = new ArrayList<>();
+        if (text.isBlank()) {
+            return blocks;
+        }
+        for (String raw : text.split("\\n{2,}")) {
+            String block = raw.strip();
+            if (!block.isBlank()) {
+                blocks.add(block);
+            }
+        }
+        return blocks;
+    }
+
+    private List<String> splitLongBlock(String block) {
+        List<String> result = new ArrayList<>();
         int start = 0;
-        while (start < clean.length()) {
-            int end = Math.min(clean.length(), start + CHUNK_SIZE);
-            result.add(clean.substring(start, end));
-            if (end == clean.length()) {
+        while (start < block.length()) {
+            int end = Math.min(block.length(), start + CHUNK_SIZE);
+            result.add(block.substring(start, end).trim());
+            if (end == block.length()) {
                 break;
             }
             start = Math.max(0, end - OVERLAP);
         }
         return result;
+    }
+
+    private void flush(StringBuilder current, List<String> chunks) {
+        String value = current.toString().trim();
+        if (!value.isBlank()) {
+            chunks.add(value);
+        }
+        current.setLength(0);
     }
 }

@@ -20,14 +20,21 @@
         </el-input>
       </el-form-item>
       <el-form-item label="密　码">
-        <el-input v-model="form.password" size="large" type="password" placeholder="请输入密码" show-password autocomplete="current-password">
+        <el-input
+          v-model="form.password"
+          size="large"
+          type="password"
+          placeholder="请输入密码"
+          show-password
+          autocomplete="current-password"
+        >
           <template #prefix><el-icon><Lock /></el-icon></template>
         </el-input>
       </el-form-item>
       <el-button class="login-button" type="primary" size="large" :loading="loading" native-type="submit">
         登录
       </el-button>
-      <div class="samples">
+      <div v-if="showDemoAccounts" class="samples">
         演示账号：admin / manager / zhangsan / newcomer，密码均为 123456
       </div>
     </el-form>
@@ -45,7 +52,11 @@ import { useAuthStore } from '../store'
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
-const form = reactive({ username: 'admin', password: '123456' })
+const showDemoAccounts = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true'
+const form = reactive({
+  username: showDemoAccounts ? 'admin' : '',
+  password: showDemoAccounts ? '123456' : ''
+})
 
 async function submit() {
   loading.value = true

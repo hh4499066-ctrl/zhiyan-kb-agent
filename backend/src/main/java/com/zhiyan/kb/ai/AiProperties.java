@@ -12,9 +12,12 @@ public class AiProperties {
     private String provider = "deepseek";
     private String baseUrl = "https://api.deepseek.com";
     private String apiKey = "";
-    private String chatModel = "deepseek-v4-flash";
+    private String chatModel = "deepseek-chat";
     private Double temperature = 0.3;
     private Integer maxTokens = 1600;
+    private Integer connectTimeoutMillis = 5000;
+    private Integer readTimeoutMillis = 30000;
+    private Integer maxRetries = 2;
 
     public boolean realMode() {
         return "real".equalsIgnoreCase(clean(mode));
@@ -31,7 +34,7 @@ public class AiProperties {
 
     public String cleanChatModel() {
         String value = clean(chatModel);
-        return value == null || value.isBlank() ? "deepseek-v4-flash" : value;
+        return value == null || value.isBlank() ? "deepseek-chat" : value;
     }
 
     private String clean(String value) {
