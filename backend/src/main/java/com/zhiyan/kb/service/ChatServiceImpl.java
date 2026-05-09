@@ -1,5 +1,6 @@
 package com.zhiyan.kb.service;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.json.JSONUtil;
 import com.zhiyan.kb.ai.AIResponseParser;
@@ -167,12 +168,8 @@ public class ChatServiceImpl implements ChatService {
         if (spaceId == null) {
             return;
         }
-        KbSpace space = spaceMapper.selectById(spaceId);
-        if (space == null) {
-            return;
-        }
-        int current = space.getQaCount() == null ? 0 : space.getQaCount();
-        space.setQaCount(current + 1);
-        spaceMapper.updateById(space);
+        spaceMapper.update(null, new LambdaUpdateWrapper<KbSpace>()
+                .eq(KbSpace::getId, spaceId)
+                .setSql("qa_count = COALESCE(qa_count, 0) + 1"));
     }
 }

@@ -2,11 +2,10 @@ package com.zhiyan.kb.controller;
 
 import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.common.BusinessException;
-import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
-import com.zhiyan.kb.common.RoleNames;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
@@ -42,6 +41,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @RestController
 @RequestMapping("/api/documents")
@@ -87,7 +88,6 @@ public class DocumentController {
     }
 
     @PostMapping("/upload")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<KbDocument> upload(@RequestParam Long spaceId, @RequestParam(required = false) String title,
                                      @RequestPart("file") MultipartFile file) throws Exception {
         if (file.isEmpty()) {
@@ -150,7 +150,6 @@ public class DocumentController {
     }
 
     @PutMapping("/{id}")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<Void> update(@PathVariable Long id, @RequestBody KbDocument document) {
         accessService.requireDocumentManage(id);
         document.setId(id);
@@ -159,21 +158,15 @@ public class DocumentController {
     }
 
     @DeleteMapping("/{id}")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<Void> delete(@PathVariable Long id) {
         KbDocument document = accessService.requireDocumentManage(id);
         document.setStatus("DELETED");
         documentMapper.updateById(document);
-        chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getDocumentId, id))
-                .forEach(c -> {
-                    c.setStatus("DISABLED");
-                    chunkMapper.updateById(c);
-                });
+        chunkService.disableDocumentChunks(id);
         return Result.ok();
     }
 
     @PostMapping("/{id}/parse")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<Void> parse(@PathVariable Long id) {
         KbDocument document = accessService.requireDocumentManage(id);
         try {
@@ -200,7 +193,6 @@ public class DocumentController {
     }
 
     @PostMapping("/{id}/ai-summary")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<Map<String, Object>> summary(@PathVariable Long id) {
         KbDocument document = accessService.requireDocumentManage(id);
         String text = llmClient.complete("Summarize this document and extract keywords, audience and reading tips:\n"
@@ -217,7 +209,6 @@ public class DocumentController {
     }
 
     @PostMapping("/{id}/generate-faq")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<List<KbFaq>> generateFaq(@PathVariable Long id) {
         KbDocument document = accessService.requireDocumentManage(id);
         String faqText = llmClient.complete("Generate FAQ items from this document:\n" + document.getContentText());
@@ -243,6 +234,31 @@ public class DocumentController {
                 throw new BusinessException(400, "Invalid DOCX file");
             }
         }
+        if ("docx".equals(ext)) {
+            if (!hasRequiredDocxEntries(file.getInputStream())) {
+                throw new BusinessException(400, "Invalid DOCX file");
+            }
+        }
+    }
+
+    static boolean hasRequiredDocxEntries(InputStream input) throws IOException {
+        boolean hasContentTypes = false;
+        boolean hasDocumentXml = false;
+        try (ZipInputStream zip = new ZipInputStream(input)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                String name = entry.getName();
+                if ("[Content_Types].xml".equals(name)) {
+                    hasContentTypes = true;
+                } else if ("word/document.xml".equals(name)) {
+                    hasDocumentXml = true;
+                }
+                if (hasContentTypes && hasDocumentXml) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean startsWith(byte[] data, byte[] prefix) {
@@ -258,12 +274,8 @@ public class DocumentController {
     }
 
     private void incrementDocumentCount(Long spaceId) {
-        KbSpace space = spaceMapper.selectById(spaceId);
-        if (space == null) {
-            return;
-        }
-        int current = space.getDocumentCount() == null ? 0 : space.getDocumentCount();
-        space.setDocumentCount(current + 1);
-        spaceMapper.updateById(space);
+        spaceMapper.update(null, new LambdaUpdateWrapper<KbSpace>()
+                .eq(KbSpace::getId, spaceId)
+                .setSql("document_count = COALESCE(document_count, 0) + 1"));
     }
 }

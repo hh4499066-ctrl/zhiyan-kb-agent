@@ -26,12 +26,7 @@ public class ChunkService {
     }
 
     public List<KbDocumentChunk> rebuildChunks(KbDocument document) {
-        chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getDocumentId, document.getId()))
-                .forEach(c -> {
-                    c.setStatus("DISABLED");
-                    chunkMapper.updateById(c);
-                });
-        vectorStoreService.removeByDocumentId(document.getId());
+        disableDocumentChunks(document.getId());
         List<String> parts = split(document.getContentText());
         List<KbDocumentChunk> chunks = new ArrayList<>();
         for (int i = 0; i < parts.size(); i++) {
@@ -49,6 +44,15 @@ public class ChunkService {
             chunks.add(chunk);
         }
         return chunks;
+    }
+
+    public void disableDocumentChunks(Long documentId) {
+        chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getDocumentId, documentId))
+                .forEach(c -> {
+                    c.setStatus("DISABLED");
+                    chunkMapper.updateById(c);
+                });
+        vectorStoreService.removeByDocumentId(documentId);
     }
 
     public List<String> split(String text) {

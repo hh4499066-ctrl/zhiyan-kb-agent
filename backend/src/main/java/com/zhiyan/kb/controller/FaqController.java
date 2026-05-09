@@ -2,9 +2,7 @@ package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhiyan.kb.common.BusinessException;
-import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
-import com.zhiyan.kb.common.RoleNames;
 import com.zhiyan.kb.entity.KbFaq;
 import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.service.ResourceAccessService;
@@ -41,7 +39,6 @@ public class FaqController {
     }
 
     @PostMapping
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<KbFaq> create(@RequestBody KbFaq faq) {
         accessService.requireSpaceManage(faq.getSpaceId());
         faq.setStatus(faq.getStatus() == null ? "NORMAL" : faq.getStatus());
@@ -51,7 +48,6 @@ public class FaqController {
     }
 
     @PutMapping("/{id}")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<Void> update(@PathVariable Long id, @RequestBody KbFaq faq) {
         KbFaq existing = existingFaq(id);
         accessService.requireSpaceManage(existing.getSpaceId());
@@ -61,7 +57,6 @@ public class FaqController {
     }
 
     @DeleteMapping("/{id}")
-    @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
     public Result<Void> delete(@PathVariable Long id) {
         KbFaq existing = existingFaq(id);
         accessService.requireSpaceManage(existing.getSpaceId());
