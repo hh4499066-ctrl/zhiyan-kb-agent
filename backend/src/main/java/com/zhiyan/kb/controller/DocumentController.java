@@ -152,8 +152,12 @@ public class DocumentController {
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @RequestBody KbDocument document) {
         accessService.requireDocumentManage(id);
-        document.setId(id);
-        documentMapper.updateById(document);
+        KbDocument update = new KbDocument();
+        update.setId(id);
+        update.setTitle(document.getTitle());
+        update.setSummary(document.getSummary());
+        update.setKeywords(document.getKeywords());
+        documentMapper.updateById(update);
         return Result.ok();
     }
 
