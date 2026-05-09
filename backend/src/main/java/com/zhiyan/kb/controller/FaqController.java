@@ -51,8 +51,12 @@ public class FaqController {
     public Result<Void> update(@PathVariable Long id, @RequestBody KbFaq faq) {
         KbFaq existing = existingFaq(id);
         accessService.requireSpaceManage(existing.getSpaceId());
-        faq.setId(id);
-        faqMapper.updateById(faq);
+        KbFaq update = new KbFaq();
+        update.setId(id);
+        update.setQuestion(faq.getQuestion());
+        update.setAnswer(faq.getAnswer());
+        update.setTags(faq.getTags());
+        faqMapper.updateById(update);
         return Result.ok();
     }
 

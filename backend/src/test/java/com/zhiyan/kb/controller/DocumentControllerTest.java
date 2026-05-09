@@ -17,6 +17,7 @@ import com.zhiyan.kb.service.ResourceAccessService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -144,6 +145,47 @@ class DocumentControllerTest {
                         .file(new MockMultipartFile("file", "note.txt", "text/plain", "hello".getBytes()))
                         .param("spaceId", "1"))
                 .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    void updateOnlyPersistsEditableDocumentFields() {
+        KbDocumentMapper documentMapper = mock(KbDocumentMapper.class);
+        ResourceAccessService accessService = mock(ResourceAccessService.class);
+        KbDocument existing = new KbDocument();
+        existing.setId(10L);
+        existing.setSpaceId(1L);
+        when(accessService.requireDocumentManage(10L)).thenReturn(existing);
+        DocumentController controller = new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
+                mock(KbFaqMapper.class), mock(KbSpaceMapper.class), mock(DocumentParseService.class),
+                mock(ChunkService.class), mock(LLMClient.class), accessService, "uploads");
+        KbDocument request = new KbDocument();
+        request.setSpaceId(999L);
+        request.setTitle("moved");
+        request.setSummary("summary");
+        request.setKeywords("k1,k2");
+        request.setFileUrl("/tmp/evil");
+        request.setContentText("rewritten content");
+        request.setParseStatus("FAILED");
+        request.setVectorStatus("FAILED");
+        request.setStatus("DELETED");
+        request.setUploaderId(999L);
+
+        controller.update(10L, request);
+
+        ArgumentCaptor<KbDocument> captor = ArgumentCaptor.forClass(KbDocument.class);
+        verify(documentMapper).updateById(captor.capture());
+        KbDocument update = captor.getValue();
+        assertThat(update.getId()).isEqualTo(10L);
+        assertThat(update.getTitle()).isEqualTo("moved");
+        assertThat(update.getSummary()).isEqualTo("summary");
+        assertThat(update.getKeywords()).isEqualTo("k1,k2");
+        assertThat(update.getSpaceId()).isNull();
+        assertThat(update.getFileUrl()).isNull();
+        assertThat(update.getContentText()).isNull();
+        assertThat(update.getParseStatus()).isNull();
+        assertThat(update.getVectorStatus()).isNull();
+        assertThat(update.getStatus()).isNull();
+        assertThat(update.getUploaderId()).isNull();
     }
 
     private byte[] zip(String... names) throws Exception {
