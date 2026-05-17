@@ -6,6 +6,7 @@ import cn.hutool.json.JSONUtil;
 import com.zhiyan.kb.ai.AIResponseParser;
 import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.ai.PromptBuilder;
+import com.zhiyan.kb.common.BusinessException;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.dto.ChatAskRequest;
 import com.zhiyan.kb.dto.ChatMemoryMessage;
@@ -24,12 +25,18 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class ChatServiceImpl implements ChatService {
     private static final double PRIMARY_MIN_SCORE = 0.18;
     private static final double FALLBACK_TRIGGER_SCORE = 0.35;
     private static final double FALLBACK_MIN_SCORE = 0.25;
+    private static final int DEFAULT_TOP_K = 5;
+    private static final int MAX_TOP_K = 20;
+    private static final int MAX_QUESTION_LENGTH = 2000;
+    private static final int MAX_ALL_SPACE_CANDIDATES = 20;
+    private static final Set<String> ALLOWED_MODELS = Set.of("deepseek-v4-flash", "deepseek-v4-pro");
 
     private final ShortTermMemoryService shortTermMemoryService;
     private final QueryRewriteService queryRewriteService;
@@ -62,6 +69,7 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public ChatAskResponse ask(ChatAskRequest request) {
+        validateRequest(request);
         Long userId = UserContext.userId();
         String sessionId = request.getSessionId() == null || request.getSessionId().isBlank() ? IdUtil.fastSimpleUUID() : request.getSessionId();
         List<ChatMemoryMessage> context = Boolean.FALSE.equals(request.getUseMemory()) ? List.of() : shortTermMemoryService.getContext(sessionId, userId);
@@ -72,7 +80,7 @@ public class ChatServiceImpl implements ChatService {
             accessService.requireSpaceAccess(scopeSpaceId);
         }
         Long effectiveSpaceId = scopeSpaceId;
-        int topK = request.getTopK() == null ? 5 : request.getTopK();
+        int topK = request.getTopK() == null ? DEFAULT_TOP_K : request.getTopK();
         List<RetrievalResult> retrievalResults = scopeSpaceId == null
                 ? searchAllSpaces(null, rewritten, topK)
                 : retrievalService.search(scopeSpaceId, rewritten, topK, 0.5, PRIMARY_MIN_SCORE);
@@ -137,11 +145,17 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private List<RetrievalResult> searchAllSpaces(Long currentSpaceId, String question, int topK) {
+        List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
+        if (accessibleSpaceIds.isEmpty()) {
+            return List.of();
+        }
         return spaceMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbSpace>()
-                        .eq(KbSpace::getStatus, "NORMAL"))
+                        .in(KbSpace::getId, accessibleSpaceIds)
+                        .eq(KbSpace::getStatus, "NORMAL")
+                        .orderByDesc(KbSpace::getUpdateTime))
                 .stream()
-                .filter(space -> accessService.canAccessSpace(space.getId()))
                 .filter(space -> currentSpaceId == null || !space.getId().equals(currentSpaceId))
+                .limit(MAX_ALL_SPACE_CANDIDATES)
                 .flatMap(space -> retrievalService.search(space.getId(), question, topK, 0.5, FALLBACK_MIN_SCORE).stream())
                 .sorted(Comparator.comparingDouble(RetrievalResult::getFinalScore).reversed())
                 .limit(Math.max(1, topK))
@@ -152,6 +166,21 @@ public class ChatServiceImpl implements ChatService {
         return spaceId == null || spaceId <= 0 ? null : spaceId;
     }
 
+    private void validateRequest(ChatAskRequest request) {
+        if (request.getQuestion() == null || request.getQuestion().isBlank()) {
+            throw new BusinessException(400, "Question is required");
+        }
+        if (request.getQuestion().length() > MAX_QUESTION_LENGTH) {
+            throw new BusinessException(400, "Question exceeds 2000 characters");
+        }
+        if (request.getTopK() != null && (request.getTopK() < 1 || request.getTopK() > MAX_TOP_K)) {
+            throw new BusinessException(400, "topK must be between 1 and 20");
+        }
+        if (request.getModel() != null && !request.getModel().isBlank() && !ALLOWED_MODELS.contains(request.getModel())) {
+            throw new BusinessException(400, "Unsupported chat model");
+        }
+    }
+
     private Long resolveRecordSpaceId(Long effectiveSpaceId, Long scopeSpaceId) {
         if (effectiveSpaceId != null) {
             return effectiveSpaceId;
@@ -159,7 +188,12 @@ public class ChatServiceImpl implements ChatService {
         if (scopeSpaceId != null) {
             return scopeSpaceId;
         }
+        List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
+        if (accessibleSpaceIds.isEmpty()) {
+            return 0L;
+        }
         KbSpace first = spaceMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbSpace>()
+                .in(KbSpace::getId, accessibleSpaceIds)
                 .eq(KbSpace::getStatus, "NORMAL")).stream().findFirst().orElse(null);
         return first == null ? 0L : first.getId();
     }

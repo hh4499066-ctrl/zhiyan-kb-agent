@@ -83,7 +83,16 @@ const form = reactive<any>({})
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const documentTotal = computed(() => rows.value.reduce((sum, row) => sum + Number(row.documentCount || 0), 0))
 const qaTotal = computed(() => rows.value.reduce((sum, row) => sum + Number(row.qaCount || 0), 0))
-async function load() { loading.value = true; try { rows.value = await http.get('/spaces', { params: { keyword: keyword.value } }); page.value = 1 } finally { loading.value = false } }
+async function load() {
+  loading.value = true
+  try {
+    const data = await http.get('/spaces', { params: { keyword: keyword.value, page: 1, size: 100 } })
+    rows.value = data.records || data
+    page.value = 1
+  } finally {
+    loading.value = false
+  }
+}
 function open(row?: any) { Object.keys(form).forEach((k) => delete form[k]); Object.assign(form, row || { visibility: 'PUBLIC', status: 'NORMAL' }); visible.value = true }
 async function save() { form.id ? await http.put(`/spaces/${form.id}`, form) : await http.post('/spaces', form); visible.value = false; await load() }
 onMounted(load)

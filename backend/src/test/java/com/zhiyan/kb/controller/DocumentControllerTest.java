@@ -13,7 +13,9 @@ import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.mapper.KbSpaceMapper;
 import com.zhiyan.kb.service.ChunkService;
 import com.zhiyan.kb.service.DocumentParseService;
+import com.zhiyan.kb.service.DocumentUploadService;
 import com.zhiyan.kb.service.ResourceAccessService;
+import com.zhiyan.kb.rag.VectorStoreService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -119,8 +121,10 @@ class DocumentControllerTest {
         ResourceAccessService accessService = mock(ResourceAccessService.class);
         when(parseService.parse(any(File.class), eq("txt"))).thenReturn("hello");
         when(chunkService.rebuildChunks(any(KbDocument.class))).thenReturn(List.of());
-        MockMvc mvc = mockMvc(new DocumentController(documentMapper, chunkMapper, faqMapper, spaceMapper,
-                parseService, chunkService, llmClient, accessService, tempDir.toString()));
+        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, spaceMapper, parseService,
+                chunkService, accessService, mock(VectorStoreService.class), tempDir.toString());
+        MockMvc mvc = mockMvc(new DocumentController(documentMapper, chunkMapper, faqMapper,
+                chunkService, llmClient, accessService, uploadService));
         login();
 
         mvc.perform(multipart("/api/documents/upload")
@@ -137,9 +141,14 @@ class DocumentControllerTest {
         ResourceAccessService accessService = mock(ResourceAccessService.class);
         doThrow(new BusinessException(403, "No permission to manage this space"))
                 .when(accessService).requireSpaceManage(1L);
-        MockMvc mvc = mockMvc(new DocumentController(mock(KbDocumentMapper.class), mock(KbDocumentChunkMapper.class),
-                mock(KbFaqMapper.class), mock(KbSpaceMapper.class), mock(DocumentParseService.class),
-                mock(ChunkService.class), mock(LLMClient.class), accessService, tempDir.toString()));
+        KbDocumentMapper documentMapper = mock(KbDocumentMapper.class);
+        KbSpaceMapper spaceMapper = mock(KbSpaceMapper.class);
+        DocumentParseService parseService = mock(DocumentParseService.class);
+        ChunkService chunkService = mock(ChunkService.class);
+        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, spaceMapper, parseService,
+                chunkService, accessService, mock(VectorStoreService.class), tempDir.toString());
+        MockMvc mvc = mockMvc(new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
+                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService, uploadService));
 
         mvc.perform(multipart("/api/documents/upload")
                         .file(new MockMultipartFile("file", "note.txt", "text/plain", "hello".getBytes()))
@@ -155,9 +164,10 @@ class DocumentControllerTest {
         existing.setId(10L);
         existing.setSpaceId(1L);
         when(accessService.requireDocumentManage(10L)).thenReturn(existing);
+        ChunkService chunkService = mock(ChunkService.class);
         DocumentController controller = new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
-                mock(KbFaqMapper.class), mock(KbSpaceMapper.class), mock(DocumentParseService.class),
-                mock(ChunkService.class), mock(LLMClient.class), accessService, "uploads");
+                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService,
+                mock(DocumentUploadService.class));
         KbDocument request = new KbDocument();
         request.setSpaceId(999L);
         request.setTitle("moved");
@@ -201,9 +211,15 @@ class DocumentControllerTest {
     }
 
     private MockMvc mockMvc() {
-        return mockMvc(new DocumentController(mock(KbDocumentMapper.class), mock(KbDocumentChunkMapper.class),
-                mock(KbFaqMapper.class), mock(KbSpaceMapper.class), mock(DocumentParseService.class),
-                mock(ChunkService.class), mock(LLMClient.class), mock(ResourceAccessService.class), tempDir.toString()));
+        KbDocumentMapper documentMapper = mock(KbDocumentMapper.class);
+        KbSpaceMapper spaceMapper = mock(KbSpaceMapper.class);
+        DocumentParseService parseService = mock(DocumentParseService.class);
+        ChunkService chunkService = mock(ChunkService.class);
+        ResourceAccessService accessService = mock(ResourceAccessService.class);
+        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, spaceMapper, parseService,
+                chunkService, accessService, mock(VectorStoreService.class), tempDir.toString());
+        return mockMvc(new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
+                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService, uploadService));
     }
 
     private MockMvc mockMvc(DocumentController controller) {

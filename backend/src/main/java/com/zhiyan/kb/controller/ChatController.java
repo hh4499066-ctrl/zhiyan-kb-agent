@@ -1,6 +1,8 @@
 package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
 import com.zhiyan.kb.common.UserContext;
@@ -59,12 +61,16 @@ public class ChatController {
     }
 
     @GetMapping("/sessions")
-    public Result<List<Map<String, Object>>> sessions() {
+    public Result<PageResult<Map<String, Object>>> sessions(@RequestParam(defaultValue = "1") long page,
+                                                            @RequestParam(defaultValue = "20") long size) {
+        page = Math.max(1, page);
+        size = Math.min(100, Math.max(1, size));
         LambdaQueryWrapper<ChatRecord> query = new LambdaQueryWrapper<ChatRecord>().orderByDesc(ChatRecord::getCreateTime);
         if (!RoleNames.ADMIN.equals(UserContext.role())) {
             query.eq(ChatRecord::getUserId, UserContext.userId());
         }
-        List<ChatRecord> records = recordMapper.selectList(query);
+        Page<ChatRecord> recordPage = recordMapper.selectPage(Page.of(page, Math.min(size * 5, 100)), query);
+        List<ChatRecord> records = recordPage.getRecords();
         Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
         for (ChatRecord record : records) {
             Map<String, Object> session = grouped.computeIfAbsent(record.getSessionId(), sessionId -> {
@@ -84,7 +90,8 @@ public class ChatController {
         }
         List<Map<String, Object>> sessions = new ArrayList<>(grouped.values());
         sessions.forEach(session -> session.remove("_firstQuestionTime"));
-        return Result.ok(sessions);
+        sessions = sessions.stream().limit(size).toList();
+        return Result.ok(new PageResult<>(recordPage.getTotal(), page, size, sessions));
     }
 
     private String titleOf(String question) {
@@ -124,8 +131,12 @@ public class ChatController {
     }
 
     @GetMapping("/records")
-    public Result<List<ChatRecord>> records(@RequestParam(required = false) Long spaceId,
-                                            @RequestParam(required = false) String sessionId) {
+    public Result<PageResult<ChatRecord>> records(@RequestParam(required = false) Long spaceId,
+                                                  @RequestParam(required = false) String sessionId,
+                                                  @RequestParam(defaultValue = "1") long page,
+                                                  @RequestParam(defaultValue = "50") long size) {
+        page = Math.max(1, page);
+        size = Math.min(100, Math.max(1, size));
         LambdaQueryWrapper<ChatRecord> query = new LambdaQueryWrapper<ChatRecord>()
                 .eq(spaceId != null, ChatRecord::getSpaceId, spaceId)
                 .eq(sessionId != null && !sessionId.isBlank(), ChatRecord::getSessionId, sessionId);
@@ -137,7 +148,8 @@ public class ChatController {
         } else {
             query.orderByDesc(ChatRecord::getCreateTime);
         }
-        return Result.ok(recordMapper.selectList(query));
+        Page<ChatRecord> result = recordMapper.selectPage(Page.of(page, size), query);
+        return Result.ok(new PageResult<>(result.getTotal(), page, size, result.getRecords()));
     }
 
     @GetMapping("/records/{id}")

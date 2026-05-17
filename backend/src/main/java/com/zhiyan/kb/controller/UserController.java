@@ -6,8 +6,12 @@ import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
+import com.zhiyan.kb.dto.CreateUserRequest;
+import com.zhiyan.kb.dto.ResetPasswordRequest;
+import com.zhiyan.kb.dto.UpdateUserRequest;
 import com.zhiyan.kb.entity.SysUser;
 import com.zhiyan.kb.mapper.SysUserMapper;
+import jakarta.validation.Valid;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +29,8 @@ public class UserController {
 
     @GetMapping
     public Result<PageResult<SysUser>> list(@RequestParam(defaultValue = "1") long page, @RequestParam(defaultValue = "20") long size, @RequestParam(required = false) String keyword) {
+        page = Math.max(1, page);
+        size = Math.min(100, Math.max(1, size));
         LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<SysUser>()
                 .like(keyword != null && !keyword.isBlank(), SysUser::getUsername, keyword)
                 .or(keyword != null && !keyword.isBlank()).like(keyword != null && !keyword.isBlank(), SysUser::getRealName, keyword)
@@ -35,18 +41,31 @@ public class UserController {
     }
 
     @PostMapping
-    public Result<SysUser> create(@RequestBody SysUser user) {
-        user.setPassword(passwordEncoder.encode(user.getPassword() == null ? "123456" : user.getPassword()));
-        user.setStatus(user.getStatus() == null ? "ENABLED" : user.getStatus());
+    public Result<SysUser> create(@Valid @RequestBody CreateUserRequest request) {
+        SysUser user = new SysUser();
+        user.setUsername(request.getUsername());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRealName(request.getRealName());
+        user.setEmail(blankToNull(request.getEmail()));
+        user.setPhone(blankToNull(request.getPhone()));
+        user.setRole(request.getRole());
+        user.setDepartmentId(request.getDepartmentId());
+        user.setStatus(request.getStatus() == null ? "ENABLED" : request.getStatus());
         userMapper.insert(user);
         user.setPassword(null);
         return Result.ok(user);
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody SysUser user) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
+        SysUser user = new SysUser();
         user.setId(id);
-        user.setPassword(null);
+        user.setRealName(request.getRealName());
+        user.setEmail(blankToNull(request.getEmail()));
+        user.setPhone(blankToNull(request.getPhone()));
+        user.setRole(request.getRole());
+        user.setDepartmentId(request.getDepartmentId());
+        user.setStatus(request.getStatus());
         userMapper.updateById(user);
         return Result.ok();
     }
@@ -67,11 +86,15 @@ public class UserController {
     }
 
     @PutMapping("/{id}/reset-password")
-    public Result<Void> reset(@PathVariable Long id, @RequestParam(defaultValue = "123456") String password) {
+    public Result<Void> reset(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest request) {
         SysUser user = new SysUser();
         user.setId(id);
-        user.setPassword(passwordEncoder.encode(password));
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
         userMapper.updateById(user);
         return Result.ok();
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }

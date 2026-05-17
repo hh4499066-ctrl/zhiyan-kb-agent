@@ -32,7 +32,12 @@ public class AuthInterceptor implements HandlerInterceptor {
             throw new BusinessException(401, "未登录或登录已过期");
         }
         UserContext.set(loginUser);
-        checkRole(handler, loginUser);
+        try {
+            checkRole(handler, loginUser);
+        } catch (RuntimeException ex) {
+            UserContext.clear();
+            throw ex;
+        }
         return true;
     }
 

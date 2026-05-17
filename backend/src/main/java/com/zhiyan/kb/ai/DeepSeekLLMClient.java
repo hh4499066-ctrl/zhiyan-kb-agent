@@ -83,10 +83,10 @@ public class DeepSeekLLMClient implements LLMClient {
                 handleRetryableError("DeepSeek network timeout", ex, attempt, maxAttempts);
             } catch (Exception ex) {
                 log.error("DeepSeek request failed", ex);
-                throw new BusinessException("DeepSeek request failed: " + ex.getMessage());
+                throw new BusinessException(502, "Model call failed. Please try again later.");
             }
         }
-        throw new BusinessException("DeepSeek request failed");
+        throw new BusinessException(502, "Model call failed. Please try again later.");
     }
 
     private void handleHttpError(RestClientResponseException ex, int attempt, int maxAttempts) {
@@ -98,13 +98,14 @@ public class DeepSeekLLMClient implements LLMClient {
             handleRetryableError("DeepSeek retryable HTTP " + status, ex, attempt, maxAttempts);
             return;
         }
-        throw new BusinessException(502, "DeepSeek HTTP error " + status + ": " + safeResponse(ex));
+        log.warn("DeepSeek non-retryable HTTP {} body={}", status, safeResponse(ex));
+        throw new BusinessException(502, "Model call failed. Please try again later.");
     }
 
     private void handleRetryableError(String message, Exception ex, int attempt, int maxAttempts) {
         if (attempt >= maxAttempts) {
             log.error("{} after {} attempts", message, attempt, ex);
-            throw new BusinessException(502, message + ": " + ex.getMessage());
+            throw new BusinessException(502, "Model call failed. Please try again later.");
         }
         long delay = Math.min(1000L * (1L << (attempt - 1)), 4000L);
         log.warn("{} attempt={} nextDelayMs={}", message, attempt, delay);
@@ -142,10 +143,10 @@ public class DeepSeekLLMClient implements LLMClient {
     private String resolveChatModel(String model) {
         String requested = model == null ? "" : model.trim();
         if (requested.isBlank()) {
-            return properties.cleanChatModel();
+            requested = properties.cleanChatModel();
         }
         if (!CHAT_MODEL_ALLOWLIST.contains(requested)) {
-            throw new BusinessException(400, "Unsupported chat model: " + requested);
+            throw new BusinessException(400, "Unsupported chat model");
         }
         return requested;
     }

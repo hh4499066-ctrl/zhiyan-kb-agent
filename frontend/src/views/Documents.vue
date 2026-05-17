@@ -95,8 +95,21 @@ const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.va
 const parsedCount = computed(() => rows.value.filter((row) => row.parseStatus === 'PARSED').length)
 const vectorizedCount = computed(() => rows.value.filter((row) => row.vectorStatus === 'VECTORIZED').length)
 
-async function loadSpaces() { spaces.value = await http.get('/spaces'); if (!spaceId.value) spaceId.value = Number(route.query.spaceId || spaces.value[0]?.id) }
-async function load() { loading.value = true; try { rows.value = await http.get('/documents', { params: { spaceId: spaceId.value } }); page.value = 1 } finally { loading.value = false } }
+async function loadSpaces() {
+  const data = await http.get('/spaces', { params: { page: 1, size: 100 } })
+  spaces.value = data.records || data
+  if (!spaceId.value) spaceId.value = Number(route.query.spaceId || spaces.value[0]?.id)
+}
+async function load() {
+  loading.value = true
+  try {
+    const data = await http.get('/documents', { params: { spaceId: spaceId.value, page: 1, size: 100 } })
+    rows.value = data.records || data
+    page.value = 1
+  } finally {
+    loading.value = false
+  }
+}
 async function upload(option: any) {
   const fd = new FormData()
   fd.append('file', option.file)

@@ -6,13 +6,14 @@ spring:
     name: zhiyan-kb-agent
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/zhiyan_kb_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: root
-    password: 123456
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/zhiyan_kb_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${MYSQL_USERNAME:}
+    password: ${MYSQL_PASSWORD:}
   data:
     redis:
       host: localhost
       port: 6379
+      password: ${REDIS_PASSWORD:}
       database: 0
       timeout: 3s
   servlet:
@@ -29,13 +30,13 @@ mybatis-plus:
       id-type: auto
 
 zhiyan:
-  demo-accounts-enabled: ${ZHIYAN_DEMO_ACCOUNTS_ENABLED:true}
+  demo-accounts-enabled: ${ZHIYAN_DEMO_ACCOUNTS_ENABLED:false}
   ai:
     mode: ${ZHIYAN_AI_MODE:mock}
     provider: deepseek
     base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
     api-key: ${DEEPSEEK_API_KEY:}
-    chat-model: ${DEEPSEEK_CHAT_MODEL:deepseek-chat}
+    chat-model: ${DEEPSEEK_CHAT_MODEL:deepseek-v4-flash}
     temperature: ${DEEPSEEK_TEMPERATURE:0.3}
     max-tokens: ${DEEPSEEK_MAX_TOKENS:1600}
     connect-timeout-millis: ${DEEPSEEK_CONNECT_TIMEOUT_MILLIS:5000}

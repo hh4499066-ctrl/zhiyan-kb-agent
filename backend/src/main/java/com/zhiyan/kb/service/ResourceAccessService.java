@@ -18,7 +18,10 @@ import com.zhiyan.kb.mapper.UnresolvedQuestionMapper;
 import com.zhiyan.kb.mapper.UserLongTermMemoryMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 public class ResourceAccessService {
@@ -49,12 +52,15 @@ public class ResourceAccessService {
     }
 
     public boolean canAccessSpace(Long spaceId) {
-        if (spaceId == null || isAdmin() || isKbManager()) {
-            return true;
+        if (spaceId == null) {
+            return false;
         }
         KbSpace space = spaceMapper.selectById(spaceId);
         if (space == null || "DELETED".equals(space.getStatus())) {
             return false;
+        }
+        if (isAdmin() || isKbManager()) {
+            return true;
         }
         Long userId = UserContext.userId();
         if (Objects.equals(space.getOwnerId(), userId) || "PUBLIC".equalsIgnoreCase(space.getVisibility())) {
@@ -74,10 +80,13 @@ public class ResourceAccessService {
     }
 
     public void requireSpaceManage(Long spaceId) {
+        KbSpace space = spaceMapper.selectById(spaceId);
+        if (space == null || "DELETED".equals(space.getStatus())) {
+            throw new BusinessException(404, "Space not found");
+        }
         if (isAdmin() || isKbManager()) {
             return;
         }
-        KbSpace space = spaceMapper.selectById(spaceId);
         Long userId = UserContext.userId();
         if (space != null && Objects.equals(space.getOwnerId(), userId)) {
             return;
@@ -90,6 +99,45 @@ public class ResourceAccessService {
         if (count == null || count == 0) {
             throw new BusinessException(403, "No permission to manage this space");
         }
+    }
+
+    public List<Long> accessibleNormalSpaceIds() {
+        if (isAdmin() || isKbManager()) {
+            return spaceMapper.selectList(new LambdaQueryWrapper<KbSpace>()
+                            .eq(KbSpace::getStatus, "NORMAL"))
+                    .stream()
+                    .map(KbSpace::getId)
+                    .toList();
+        }
+        Long userId = UserContext.userId();
+        Set<Long> ids = new LinkedHashSet<>();
+        spaceMapper.selectList(new LambdaQueryWrapper<KbSpace>()
+                        .eq(KbSpace::getStatus, "NORMAL")
+                        .and(q -> q.eq(KbSpace::getVisibility, "PUBLIC")
+                                .or()
+                                .eq(KbSpace::getOwnerId, userId)))
+                .forEach(space -> ids.add(space.getId()));
+        spaceMemberMapper.selectList(new LambdaQueryWrapper<KbSpaceMember>()
+                        .eq(KbSpaceMember::getUserId, userId)
+                        .eq(KbSpaceMember::getStatus, "NORMAL"))
+                .stream()
+                .map(KbSpaceMember::getSpaceId)
+                .distinct()
+                .toList()
+                .stream()
+                .filter(memberSpaceId -> !ids.contains(memberSpaceId))
+                .toList()
+                .forEach(ids::add);
+        if (!ids.isEmpty()) {
+            Set<Long> normalIds = spaceMapper.selectList(new LambdaQueryWrapper<KbSpace>()
+                            .in(KbSpace::getId, ids)
+                            .eq(KbSpace::getStatus, "NORMAL"))
+                    .stream()
+                    .map(KbSpace::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            ids.removeIf(id -> !normalIds.contains(id));
+        }
+        return List.copyOf(ids);
     }
 
     public ChatRecord requireChatRecord(Long id) {

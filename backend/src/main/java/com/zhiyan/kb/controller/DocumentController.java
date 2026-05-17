@@ -1,29 +1,26 @@
 package com.zhiyan.kb.controller;
 
-import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.common.BusinessException;
+import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.Result;
-import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.entity.KbFaq;
-import com.zhiyan.kb.entity.KbSpace;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
 import com.zhiyan.kb.mapper.KbDocumentMapper;
 import com.zhiyan.kb.mapper.KbFaqMapper;
-import com.zhiyan.kb.mapper.KbSpaceMapper;
 import com.zhiyan.kb.service.ChunkService;
-import com.zhiyan.kb.service.DocumentParseService;
+import com.zhiyan.kb.service.DocumentUploadService;
 import com.zhiyan.kb.service.ResourceAccessService;
-import org.springframework.beans.factory.annotation.Value;
+import com.zhiyan.kb.vo.DocumentVO;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,120 +30,67 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 @RestController
 @RequestMapping("/api/documents")
 public class DocumentController {
-    private static final Set<String> ALLOWED_FILE_TYPES = Set.of("txt", "md", "pdf", "docx");
-    private static final long MAX_UPLOAD_BYTES = 20L * 1024 * 1024;
-
     private final KbDocumentMapper documentMapper;
     private final KbDocumentChunkMapper chunkMapper;
     private final KbFaqMapper faqMapper;
-    private final KbSpaceMapper spaceMapper;
-    private final DocumentParseService parseService;
     private final ChunkService chunkService;
     private final LLMClient llmClient;
     private final ResourceAccessService accessService;
-    private final String uploadDir;
+    private final DocumentUploadService uploadService;
 
     public DocumentController(KbDocumentMapper documentMapper, KbDocumentChunkMapper chunkMapper,
-                              KbFaqMapper faqMapper, KbSpaceMapper spaceMapper,
-                              DocumentParseService parseService, ChunkService chunkService,
+                              KbFaqMapper faqMapper, ChunkService chunkService,
                               LLMClient llmClient, ResourceAccessService accessService,
-                              @Value("${zhiyan.upload-dir:uploads}") String uploadDir) {
+                              DocumentUploadService uploadService) {
         this.documentMapper = documentMapper;
         this.chunkMapper = chunkMapper;
         this.faqMapper = faqMapper;
-        this.spaceMapper = spaceMapper;
-        this.parseService = parseService;
         this.chunkService = chunkService;
         this.llmClient = llmClient;
         this.accessService = accessService;
-        this.uploadDir = uploadDir;
+        this.uploadService = uploadService;
     }
 
     @GetMapping
-    public Result<List<KbDocument>> list(@RequestParam(required = false) Long spaceId,
-                                         @RequestParam(required = false) String keyword) {
-        List<KbDocument> documents = documentMapper.selectList(new LambdaQueryWrapper<KbDocument>()
+    public Result<PageResult<DocumentVO>> list(@RequestParam(required = false) Long spaceId,
+                                               @RequestParam(required = false) String keyword,
+                                               @RequestParam(defaultValue = "1") long page,
+                                               @RequestParam(defaultValue = "20") long size) {
+        page = Math.max(1, page);
+        size = Math.min(100, Math.max(1, size));
+        List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
+        if (accessibleSpaceIds.isEmpty()) {
+            return Result.ok(new PageResult<>(0, page, size, List.of()));
+        }
+        if (spaceId != null && !accessibleSpaceIds.contains(spaceId)) {
+            throw new BusinessException(403, "No permission to access this space");
+        }
+        LambdaQueryWrapper<KbDocument> query = new LambdaQueryWrapper<KbDocument>()
                 .eq(spaceId != null, KbDocument::getSpaceId, spaceId)
+                .in(spaceId == null, KbDocument::getSpaceId, accessibleSpaceIds)
                 .like(keyword != null && !keyword.isBlank(), KbDocument::getTitle, keyword)
                 .eq(KbDocument::getStatus, "NORMAL")
-                .orderByDesc(KbDocument::getCreateTime));
-        return Result.ok(documents.stream().filter(d -> accessService.canAccessSpace(d.getSpaceId())).toList());
+                .orderByDesc(KbDocument::getCreateTime);
+        Page<KbDocument> result = documentMapper.selectPage(Page.of(page, size), query);
+        List<DocumentVO> records = result.getRecords().stream().map(DocumentVO::from).toList();
+        return Result.ok(new PageResult<>(result.getTotal(), page, size, records));
     }
 
     @PostMapping("/upload")
-    public Result<KbDocument> upload(@RequestParam Long spaceId, @RequestParam(required = false) String title,
+    public Result<DocumentVO> upload(@RequestParam Long spaceId, @RequestParam(required = false) String title,
                                      @RequestPart("file") MultipartFile file) throws Exception {
-        if (file.isEmpty()) {
-            throw new BusinessException(400, "Uploaded file is empty");
-        }
-        if (file.getSize() > MAX_UPLOAD_BYTES) {
-            throw new BusinessException(400, "Uploaded file exceeds 20MB");
-        }
-        accessService.requireSpaceManage(spaceId);
-
-        String originalFilename = Paths.get(file.getOriginalFilename() == null ? "upload" : file.getOriginalFilename())
-                .getFileName()
-                .toString();
-        String ext = FileUtil.extName(originalFilename).toLowerCase(Locale.ROOT);
-        if (!ALLOWED_FILE_TYPES.contains(ext)) {
-            throw new BusinessException(400, "Unsupported file type");
-        }
-        validateFileSignature(file, ext);
-
-        Path base = Paths.get(uploadDir).toAbsolutePath().normalize();
-        Path target = base.resolve(UUID.randomUUID() + "." + ext).normalize();
-        if (!target.startsWith(base)) {
-            throw new BusinessException(400, "Invalid upload path");
-        }
-        Files.createDirectories(base);
-        file.transferTo(target);
-
-        KbDocument document = new KbDocument();
-        document.setSpaceId(spaceId);
-        document.setTitle(title == null || title.isBlank() ? FileUtil.mainName(originalFilename) : title);
-        document.setOriginalFilename(originalFilename);
-        document.setFileType(ext);
-        document.setFileSize(file.getSize());
-        document.setFileUrl(target.toString());
-        document.setParseStatus("PARSING");
-        document.setVectorStatus("PROCESSING");
-        document.setStatus("NORMAL");
-        document.setUploaderId(UserContext.userId());
-        documentMapper.insert(document);
-
-        try {
-            document.setContentText(parseService.parse(target.toFile(), ext));
-            chunkService.rebuildChunks(document);
-            document.setParseStatus("SUCCESS");
-            document.setVectorStatus("SUCCESS");
-            documentMapper.updateById(document);
-            incrementDocumentCount(spaceId);
-        } catch (Exception ex) {
-            document.setParseStatus("FAILED");
-            document.setVectorStatus("FAILED");
-            documentMapper.updateById(document);
-            throw ex;
-        }
-        return Result.ok(document);
+        return Result.ok(DocumentVO.from(uploadService.upload(spaceId, title, file)));
     }
 
     @GetMapping("/{id}")
-    public Result<KbDocument> detail(@PathVariable Long id) {
-        return Result.ok(accessService.requireDocument(id));
+    public Result<DocumentVO> detail(@PathVariable Long id) {
+        return Result.ok(DocumentVO.from(accessService.requireDocument(id)));
     }
 
     @PutMapping("/{id}")
@@ -228,58 +172,7 @@ public class DocumentController {
         return Result.ok(List.of(faq));
     }
 
-    private void validateFileSignature(MultipartFile file, String ext) throws IOException {
-        try (InputStream input = file.getInputStream()) {
-            byte[] header = input.readNBytes(8);
-            if ("pdf".equals(ext) && !startsWith(header, "%PDF".getBytes())) {
-                throw new BusinessException(400, "Invalid PDF file");
-            }
-            if ("docx".equals(ext) && !(header.length >= 4 && header[0] == 'P' && header[1] == 'K')) {
-                throw new BusinessException(400, "Invalid DOCX file");
-            }
-        }
-        if ("docx".equals(ext)) {
-            if (!hasRequiredDocxEntries(file.getInputStream())) {
-                throw new BusinessException(400, "Invalid DOCX file");
-            }
-        }
-    }
-
-    static boolean hasRequiredDocxEntries(InputStream input) throws IOException {
-        boolean hasContentTypes = false;
-        boolean hasDocumentXml = false;
-        try (ZipInputStream zip = new ZipInputStream(input)) {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                String name = entry.getName();
-                if ("[Content_Types].xml".equals(name)) {
-                    hasContentTypes = true;
-                } else if ("word/document.xml".equals(name)) {
-                    hasDocumentXml = true;
-                }
-                if (hasContentTypes && hasDocumentXml) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private boolean startsWith(byte[] data, byte[] prefix) {
-        if (data.length < prefix.length) {
-            return false;
-        }
-        for (int i = 0; i < prefix.length; i++) {
-            if (data[i] != prefix[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private void incrementDocumentCount(Long spaceId) {
-        spaceMapper.update(null, new LambdaUpdateWrapper<KbSpace>()
-                .eq(KbSpace::getId, spaceId)
-                .setSql("document_count = COALESCE(document_count, 0) + 1"));
+    public static boolean hasRequiredDocxEntries(InputStream input) throws IOException {
+        return DocumentUploadService.hasRequiredDocxEntries(input);
     }
 }

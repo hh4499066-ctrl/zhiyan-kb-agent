@@ -36,7 +36,7 @@ public class AuthController {
     private final boolean demoAccountsEnabled;
 
     public AuthController(SysUserMapper userMapper, BCryptPasswordEncoder passwordEncoder, TokenUtil tokenUtil,
-                          @Value("${zhiyan.demo-accounts-enabled:true}") boolean demoAccountsEnabled) {
+                          @Value("${zhiyan.demo-accounts-enabled:false}") boolean demoAccountsEnabled) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.tokenUtil = tokenUtil;

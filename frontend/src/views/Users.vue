@@ -78,7 +78,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Edit, Key, Plus, Search, SwitchButton } from '@element-plus/icons-vue'
 import ActionIconButton from '../components/ActionIconButton.vue'
 import StatusTag from '../components/StatusTag.vue'
@@ -109,7 +109,7 @@ async function load() {
 }
 function open(row?: any) {
   Object.keys(form).forEach((k) => delete form[k])
-  Object.assign(form, row || { role: 'employee', status: 'ENABLED', password: '123456' })
+  Object.assign(form, row || { role: 'employee', status: 'ENABLED', password: '' })
   visible.value = true
 }
 async function save() {
@@ -123,8 +123,9 @@ async function status(row: any) {
   await load()
 }
 async function reset(row: any) {
-  await http.put(`/users/${row.id}/reset-password`, null, { params: { password: '123456' } })
-  ElMessage.success('已重置为 123456')
+  const { value } = await ElMessageBox.prompt('请输入至少 8 位临时密码', '重置密码', { inputType: 'password' })
+  await http.put(`/users/${row.id}/reset-password`, { password: value })
+  ElMessage.success('密码已重置')
 }
 function exportSelected() {
   const lines = ['用户名,姓名,角色,邮箱,状态', ...selectedRows.value.map((r) => [r.username, r.realName, r.role, r.email, r.status].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))]

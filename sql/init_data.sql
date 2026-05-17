@@ -78,3 +78,9 @@ INSERT INTO unresolved_question(user_id, space_id, question, rewritten_question,
 
 INSERT INTO onboarding_plan(user_id, role_type, title, description, plan_content, recommended_documents) VALUES
 (4,'后端','后端新人 7 天学习路径','初始化演示学习计划','第 1 天：了解团队项目结构\n第 2 天：阅读 Java 开发规范\n第 3 天：阅读 MySQL 使用规范\n第 4 天：阅读 Redis 使用规范\n第 5 天：本地启动项目\n第 6 天：完成简单需求\n第 7 天：提交代码并 Code Review','新人入职第一周学习指南、Java 接口命名规范、MySQL 索引使用规范');
+UPDATE kb_space s
+SET document_count = (
+    SELECT COUNT(*) FROM kb_document d WHERE d.space_id = s.id AND d.status = 'NORMAL'
+), qa_count = (
+    SELECT COUNT(*) FROM kb_faq f WHERE f.space_id = s.id AND f.status = 'NORMAL'
+);

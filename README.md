@@ -44,11 +44,20 @@ zhiyan-kb-agent
 docker compose up -d
 ```
 
+Before starting Docker Compose, set non-default secrets:
+
+```bash
+export MYSQL_ROOT_PASSWORD='replace-with-strong-password'
+export MYSQL_USERNAME='root'
+export MYSQL_PASSWORD="$MYSQL_ROOT_PASSWORD"
+export REDIS_PASSWORD='replace-with-strong-redis-password'
+```
+
 方式二：手动创建 MySQL 8 数据库后执行：
 
 ```bash
-mysql -uroot -p123456 < sql/schema.sql
-mysql -uroot -p123456 < sql/init_data.sql
+mysql -u"$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" < sql/schema.sql
+mysql -u"$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" < sql/init_data.sql
 ```
 
 Redis 默认连接：`localhost:6379`。MySQL 默认连接：`localhost:3306/zhiyan_kb_agent`，账号密码为 `root / 123456`，可在 [application.yml](backend/src/main/resources/application.yml) 修改。
@@ -80,6 +89,8 @@ npm run dev
 | manager | 123456 | 知识库管理员 |
 | zhangsan | 123456 | 普通员工 |
 | newcomer | 123456 | 新人 |
+
+Default demo-account login is disabled unless `ZHIYAN_DEMO_ACCOUNTS_ENABLED=true` is set. Keep it disabled outside local demos.
 
 初始化密码以 SHA-256 形式保存；系统新增/重置用户使用 BCrypt 加密，登录逻辑兼容两种格式，便于演示数据导入。
 

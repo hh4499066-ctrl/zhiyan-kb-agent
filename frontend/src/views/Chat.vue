@@ -153,7 +153,8 @@ function newSession() {
 }
 
 async function loadSessions() {
-  sessions.value = await http.get('/chat/sessions')
+  const data = await http.get('/chat/sessions', { params: { page: 1, size: 50 } })
+  sessions.value = data.records || data
 }
 
 async function loadSession(session: any) {
@@ -161,7 +162,8 @@ async function loadSession(session: any) {
   spaceId.value = session.spaceId || 0
   question.value = ''
   viewingHistory.value = true
-  const records = await http.get('/chat/records', { params: { sessionId: session.sessionId } })
+  const data = await http.get('/chat/records', { params: { sessionId: session.sessionId, page: 1, size: 100 } })
+  const records = data.records || data
   messages.value = records.flatMap((r: any) => [
     { id: `${r.id}-q`, role: 'USER', content: r.question },
     { id: `${r.id}-a`, role: 'ASSISTANT', content: r.answer, refs: safeRefs(r.referencesJson) }
@@ -239,7 +241,8 @@ function safeRefs(json: string) {
 }
 
 onMounted(async () => {
-  spaces.value = await http.get('/spaces')
+  const spaceData = await http.get('/spaces', { params: { page: 1, size: 100 } })
+  spaces.value = spaceData.records || spaceData
   const querySpaceId = Number(route.query.spaceId)
   spaceId.value = spaces.value.some((s) => s.id === querySpaceId) ? querySpaceId : 0
   await loadSessions()

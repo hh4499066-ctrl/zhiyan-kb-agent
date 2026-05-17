@@ -1,6 +1,9 @@
 package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zhiyan.kb.common.BusinessException;
+import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
@@ -31,18 +34,31 @@ public class SpaceController {
     }
 
     @GetMapping
-    public Result<List<KbSpace>> list(@RequestParam(required = false) String keyword) {
-        List<KbSpace> spaces = spaceMapper.selectList(new LambdaQueryWrapper<KbSpace>()
+    public Result<PageResult<KbSpace>> list(@RequestParam(required = false) String keyword,
+                                            @RequestParam(defaultValue = "1") long page,
+                                            @RequestParam(defaultValue = "100") long size) {
+        page = Math.max(1, page);
+        size = Math.min(100, Math.max(1, size));
+        List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
+        if (accessibleSpaceIds.isEmpty()) {
+            return Result.ok(new PageResult<>(0, page, size, List.of()));
+        }
+        Page<KbSpace> result = spaceMapper.selectPage(Page.of(page, size), new LambdaQueryWrapper<KbSpace>()
+                .in(KbSpace::getId, accessibleSpaceIds)
                 .like(keyword != null && !keyword.isBlank(), KbSpace::getName, keyword)
                 .ne(KbSpace::getStatus, "DELETED")
                 .orderByDesc(KbSpace::getCreateTime));
-        return Result.ok(spaces.stream().filter(space -> accessService.canAccessSpace(space.getId())).toList());
+        return Result.ok(new PageResult<>(result.getTotal(), page, size, result.getRecords()));
     }
 
     @GetMapping("/{id}")
     public Result<KbSpace> detail(@PathVariable Long id) {
         accessService.requireSpaceAccess(id);
-        return Result.ok(spaceMapper.selectById(id));
+        KbSpace space = spaceMapper.selectById(id);
+        if (space == null || "DELETED".equals(space.getStatus())) {
+            throw new BusinessException(404, "Space not found");
+        }
+        return Result.ok(space);
     }
 
     @PostMapping

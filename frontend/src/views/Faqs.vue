@@ -93,5 +93,9 @@ async function removeSelected() {
   selectedRows.value = []
   await load()
 }
-onMounted(async () => { spaces.value = await http.get('/spaces'); await load() })
+onMounted(async () => {
+  const data = await http.get('/spaces', { params: { page: 1, size: 100 } })
+  spaces.value = data.records || data
+  await load()
+})
 </script>

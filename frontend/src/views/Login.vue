@@ -87,7 +87,7 @@ import { useAuthStore } from '../store'
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
-const showDemoAccounts = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true'
+const showDemoAccounts = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true'
 const form = reactive({
   username: showDemoAccounts ? 'admin' : '',
   password: showDemoAccounts ? '123456' : ''

@@ -9,10 +9,11 @@ import com.zhiyan.kb.mapper.KbDocumentMapper;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class MockVectorStoreService implements VectorStoreService {
@@ -30,9 +31,18 @@ public class MockVectorStoreService implements VectorStoreService {
     @PostConstruct
     public void rebuild() {
         List<KbDocumentChunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getStatus, "NORMAL"));
+        if (chunks.isEmpty()) {
+            return;
+        }
+        List<Long> documentIds = chunks.stream().map(KbDocumentChunk::getDocumentId).distinct().toList();
+        Map<Long, KbDocument> documents = documentMapper.selectList(new LambdaQueryWrapper<KbDocument>()
+                        .in(KbDocument::getId, documentIds)
+                        .eq(KbDocument::getStatus, "NORMAL"))
+                .stream()
+                .collect(Collectors.toMap(KbDocument::getId, Function.identity()));
         for (KbDocumentChunk chunk : chunks) {
-            KbDocument document = documentMapper.selectById(chunk.getDocumentId());
-            if (document != null && "NORMAL".equals(document.getStatus())) {
+            KbDocument document = documents.get(chunk.getDocumentId());
+            if (document != null) {
                 upsert(chunk, embeddingClient.embed(chunk.getContent()), document.getTitle());
             }
         }

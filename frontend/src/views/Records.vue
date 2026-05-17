@@ -66,7 +66,16 @@ const averageConfidence = computed(() => {
   if (!values.length) return 0
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
 })
-async function load() { loading.value = true; try { rows.value = await http.get('/chat/records'); page.value = 1 } finally { loading.value = false } }
+async function load() {
+  loading.value = true
+  try {
+    const data = await http.get('/chat/records', { params: { page: 1, size: 100 } })
+    rows.value = data.records || data
+    page.value = 1
+  } finally {
+    loading.value = false
+  }
+}
 async function feedback(row: any, helpful: boolean) {
   await http.post(`/chat/records/${row.id}/feedback`, { helpful, comment: helpful ? '有帮助' : '需要补充' })
   ElMessage.success('已反馈')
