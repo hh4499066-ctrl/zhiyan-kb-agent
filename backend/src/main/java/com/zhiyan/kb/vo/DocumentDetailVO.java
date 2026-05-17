@@ -2,29 +2,15 @@ package com.zhiyan.kb.vo;
 
 import com.zhiyan.kb.entity.KbDocument;
 import lombok.Data;
-
-import java.time.LocalDateTime;
+import lombok.EqualsAndHashCode;
 
 @Data
-public class DocumentVO {
-    private Long id;
-    private Long spaceId;
-    private String title;
-    private String originalFilename;
-    private String fileType;
-    private Long fileSize;
+@EqualsAndHashCode(callSuper = true)
+public class DocumentDetailVO extends DocumentListVO {
     private String contentText;
-    private String summary;
-    private String keywords;
-    private String parseStatus;
-    private String vectorStatus;
-    private String status;
-    private Long uploaderId;
-    private LocalDateTime createTime;
-    private LocalDateTime updateTime;
 
-    public static DocumentVO from(KbDocument document) {
-        DocumentVO vo = new DocumentVO();
+    public static DocumentDetailVO from(KbDocument document) {
+        DocumentDetailVO vo = new DocumentDetailVO();
         vo.setId(document.getId());
         vo.setSpaceId(document.getSpaceId());
         vo.setTitle(document.getTitle());

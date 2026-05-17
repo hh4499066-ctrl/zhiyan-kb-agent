@@ -1,12 +1,13 @@
 package com.zhiyan.kb.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.zhiyan.kb.ai.EmbeddingClient;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
 import com.zhiyan.kb.rag.VectorStoreService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,14 +19,37 @@ public class ChunkService {
     private final KbDocumentChunkMapper chunkMapper;
     private final EmbeddingClient embeddingClient;
     private final VectorStoreService vectorStoreService;
+    private final TransactionTemplate transactionTemplate;
 
-    public ChunkService(KbDocumentChunkMapper chunkMapper, EmbeddingClient embeddingClient, VectorStoreService vectorStoreService) {
+    public ChunkService(KbDocumentChunkMapper chunkMapper, EmbeddingClient embeddingClient,
+                        VectorStoreService vectorStoreService) {
+        this(chunkMapper, embeddingClient, vectorStoreService, null);
+    }
+
+    public ChunkService(KbDocumentChunkMapper chunkMapper, EmbeddingClient embeddingClient,
+                        VectorStoreService vectorStoreService, TransactionTemplate transactionTemplate) {
         this.chunkMapper = chunkMapper;
         this.embeddingClient = embeddingClient;
         this.vectorStoreService = vectorStoreService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     public List<KbDocumentChunk> rebuildChunks(KbDocument document) {
+        List<KbDocumentChunk> chunks = persistChunks(document);
+        for (KbDocumentChunk chunk : chunks) {
+            vectorStoreService.upsert(chunk, embeddingClient.embed(chunk.getContent()), document.getTitle());
+        }
+        return chunks;
+    }
+
+    private List<KbDocumentChunk> persistChunks(KbDocument document) {
+        if (transactionTemplate == null) {
+            return persistChunksInCurrentThread(document);
+        }
+        return transactionTemplate.execute(status -> persistChunksInCurrentThread(document));
+    }
+
+    private List<KbDocumentChunk> persistChunksInCurrentThread(KbDocument document) {
         disableDocumentChunks(document.getId());
         List<String> parts = split(document.getContentText());
         List<KbDocumentChunk> chunks = new ArrayList<>();
@@ -40,18 +64,15 @@ public class ChunkService {
             chunk.setVectorId("mock-vector-" + document.getId() + "-" + i);
             chunk.setStatus("NORMAL");
             chunkMapper.insert(chunk);
-            vectorStoreService.upsert(chunk, embeddingClient.embed(chunk.getContent()), document.getTitle());
             chunks.add(chunk);
         }
         return chunks;
     }
 
     public void disableDocumentChunks(Long documentId) {
-        chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getDocumentId, documentId))
-                .forEach(c -> {
-                    c.setStatus("DISABLED");
-                    chunkMapper.updateById(c);
-                });
+        chunkMapper.update(null, new UpdateWrapper<KbDocumentChunk>()
+                .eq("document_id", documentId)
+                .set("status", "DISABLED"));
         vectorStoreService.removeByDocumentId(documentId);
     }
 

@@ -14,23 +14,26 @@ const props = defineProps<{
 const meta = computed(() => {
   const value = String(props.value ?? '').toUpperCase()
   const map: Record<string, { label: string; type: 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
-    ENABLED: { label: '启用', type: 'success' },
-    DISABLED: { label: '禁用', type: 'danger' },
-    NORMAL: { label: '正常', type: 'success' },
-    DELETED: { label: '已删除', type: 'danger' },
-    PENDING: { label: '待处理', type: 'warning' },
-    RESOLVED: { label: '已解决', type: 'success' },
-    IGNORED: { label: '已忽略', type: 'info' },
-    PUBLIC: { label: '公开', type: 'success' },
-    DEPARTMENT: { label: '部门', type: 'primary' },
-    PRIVATE: { label: '私有', type: 'warning' },
-    PARSED: { label: '已解析', type: 'success' },
-    PARSING: { label: '解析中', type: 'warning' },
-    FAILED: { label: '失败', type: 'danger' },
-    VECTORIZED: { label: '已向量化', type: 'success' },
-    VECTORING: { label: '向量化中', type: 'warning' },
-    TRUE: { label: '是', type: 'danger' },
-    FALSE: { label: '否', type: 'success' }
+    ENABLED: { label: 'Enabled', type: 'success' },
+    DISABLED: { label: 'Disabled', type: 'danger' },
+    NORMAL: { label: 'Normal', type: 'success' },
+    DELETED: { label: 'Deleted', type: 'danger' },
+    PENDING: { label: 'Pending', type: 'warning' },
+    RESOLVED: { label: 'Resolved', type: 'success' },
+    IGNORED: { label: 'Ignored', type: 'info' },
+    PUBLIC: { label: 'Public', type: 'success' },
+    DEPARTMENT: { label: 'Department', type: 'primary' },
+    PRIVATE: { label: 'Private', type: 'warning' },
+    UPLOADED: { label: 'Uploaded', type: 'info' },
+    PARSED: { label: 'Parsed', type: 'success' },
+    PARSING: { label: 'Parsing', type: 'warning' },
+    SUCCESS: { label: 'Success', type: 'success' },
+    FAILED: { label: 'Failed', type: 'danger' },
+    VECTORIZED: { label: 'Vectorized', type: 'success' },
+    VECTORING: { label: 'Vectoring', type: 'warning' },
+    PROCESSING: { label: 'Processing', type: 'warning' },
+    TRUE: { label: 'Yes', type: 'danger' },
+    FALSE: { label: 'No', type: 'success' }
   }
   return map[value] || { label: String(props.value ?? '-'), type: 'info' as const }
 })

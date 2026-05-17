@@ -8,6 +8,7 @@ import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
 import com.zhiyan.kb.dto.CreateUserRequest;
 import com.zhiyan.kb.dto.ResetPasswordRequest;
+import com.zhiyan.kb.dto.UpdateUserStatusRequest;
 import com.zhiyan.kb.dto.UpdateUserRequest;
 import com.zhiyan.kb.entity.SysUser;
 import com.zhiyan.kb.mapper.SysUserMapper;
@@ -77,10 +78,10 @@ public class UserController {
     }
 
     @PutMapping("/{id}/status")
-    public Result<Void> status(@PathVariable Long id, @RequestParam String status) {
+    public Result<Void> status(@PathVariable Long id, @Valid @RequestBody UpdateUserStatusRequest request) {
         SysUser user = new SysUser();
         user.setId(id);
-        user.setStatus(status);
+        user.setStatus(request.getStatus());
         userMapper.updateById(user);
         return Result.ok();
     }

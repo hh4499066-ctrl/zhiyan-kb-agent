@@ -10,6 +10,7 @@ import com.zhiyan.kb.config.TokenUtil;
 import com.zhiyan.kb.dto.LoginRequest;
 import com.zhiyan.kb.entity.SysUser;
 import com.zhiyan.kb.mapper.SysUserMapper;
+import com.zhiyan.kb.service.LoginRateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,7 +18,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,25 +33,32 @@ public class AuthController {
     private final SysUserMapper userMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final TokenUtil tokenUtil;
+    private final LoginRateLimitService loginRateLimitService;
     private final boolean demoAccountsEnabled;
 
     public AuthController(SysUserMapper userMapper, BCryptPasswordEncoder passwordEncoder, TokenUtil tokenUtil,
+                          LoginRateLimitService loginRateLimitService,
                           @Value("${zhiyan.demo-accounts-enabled:false}") boolean demoAccountsEnabled) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.tokenUtil = tokenUtil;
+        this.loginRateLimitService = loginRateLimitService;
         this.demoAccountsEnabled = demoAccountsEnabled;
     }
 
     @PostMapping("/login")
-    public Result<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
+    public Result<Map<String, Object>> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+        String clientIp = clientIp(servletRequest);
+        loginRateLimitService.assertAllowed(request.getUsername(), clientIp);
         SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, request.getUsername()));
         if (user == null || !"ENABLED".equals(user.getStatus()) || !passwordMatches(request.getPassword(), user.getPassword())) {
+            loginRateLimitService.recordFailure(request.getUsername(), clientIp);
             throw new BusinessException(401, "Invalid username or password");
         }
         if (!demoAccountsEnabled && isDefaultDemoAccount(user)) {
             throw new BusinessException(403, "Default demo account is disabled");
         }
+        loginRateLimitService.clear(request.getUsername(), clientIp);
         LoginUser loginUser = toLoginUser(user);
         return Result.ok(Map.of("token", tokenUtil.createToken(loginUser), "user", loginUser));
     }
@@ -93,5 +100,17 @@ public class AuthController {
     private boolean isDefaultDemoAccount(SysUser user) {
         return DEMO_USERNAMES.contains(user.getUsername())
                 && DEFAULT_DEMO_PASSWORD_SHA256.equalsIgnoreCase(user.getPassword());
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 }

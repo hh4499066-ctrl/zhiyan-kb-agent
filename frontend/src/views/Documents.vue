@@ -92,8 +92,8 @@ const drawerTitle = ref('')
 const drawerText = ref('')
 const chunkRows = ref<any[]>([])
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-const parsedCount = computed(() => rows.value.filter((row) => row.parseStatus === 'PARSED').length)
-const vectorizedCount = computed(() => rows.value.filter((row) => row.vectorStatus === 'VECTORIZED').length)
+const parsedCount = computed(() => rows.value.filter((row) => row.parseStatus === 'SUCCESS').length)
+const vectorizedCount = computed(() => rows.value.filter((row) => row.vectorStatus === 'SUCCESS').length)
 
 async function loadSpaces() {
   const data = await http.get('/spaces', { params: { page: 1, size: 100 } })
@@ -115,10 +115,16 @@ async function upload(option: any) {
   fd.append('file', option.file)
   fd.append('spaceId', String(spaceId.value))
   await http.post('/documents/upload', fd)
-  ElMessage.success('上传并解析完成')
+  ElMessage.success('上传成功，正在后台解析')
   await load()
 }
-function detail(row: any) { drawerTitle.value = row.title; drawerText.value = row.contentText || row.summary; chunkRows.value = []; drawer.value = true }
+async function detail(row: any) {
+  const data = await http.get(`/documents/${row.id}`)
+  drawerTitle.value = data.title
+  drawerText.value = data.contentText || data.summary || ''
+  chunkRows.value = []
+  drawer.value = true
+}
 async function chunks(row: any) { drawerTitle.value = `${row.title} - Chunk`; drawerText.value = ''; chunkRows.value = await http.get(`/documents/${row.id}/chunks`); drawer.value = true }
 async function summary(row: any) { const data = await http.post(`/documents/${row.id}/ai-summary`); drawerTitle.value = 'AI 摘要'; drawerText.value = data.summary; chunkRows.value = []; drawer.value = true; await load() }
 async function faq(row: any) { await http.post(`/documents/${row.id}/generate-faq`); ElMessage.success('FAQ 已生成') }

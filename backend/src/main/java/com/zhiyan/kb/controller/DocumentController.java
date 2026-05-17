@@ -6,6 +6,7 @@ import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.common.BusinessException;
 import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.Result;
+import com.zhiyan.kb.dto.UpdateDocumentRequest;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.entity.KbFaq;
@@ -15,7 +16,9 @@ import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.service.ChunkService;
 import com.zhiyan.kb.service.DocumentUploadService;
 import com.zhiyan.kb.service.ResourceAccessService;
-import com.zhiyan.kb.vo.DocumentVO;
+import com.zhiyan.kb.vo.DocumentDetailVO;
+import com.zhiyan.kb.vo.DocumentListVO;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,10 +61,10 @@ public class DocumentController {
     }
 
     @GetMapping
-    public Result<PageResult<DocumentVO>> list(@RequestParam(required = false) Long spaceId,
-                                               @RequestParam(required = false) String keyword,
-                                               @RequestParam(defaultValue = "1") long page,
-                                               @RequestParam(defaultValue = "20") long size) {
+    public Result<PageResult<DocumentListVO>> list(@RequestParam(required = false) Long spaceId,
+                                                   @RequestParam(required = false) String keyword,
+                                                   @RequestParam(defaultValue = "1") long page,
+                                                   @RequestParam(defaultValue = "20") long size) {
         page = Math.max(1, page);
         size = Math.min(100, Math.max(1, size));
         List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
@@ -78,29 +81,29 @@ public class DocumentController {
                 .eq(KbDocument::getStatus, "NORMAL")
                 .orderByDesc(KbDocument::getCreateTime);
         Page<KbDocument> result = documentMapper.selectPage(Page.of(page, size), query);
-        List<DocumentVO> records = result.getRecords().stream().map(DocumentVO::from).toList();
+        List<DocumentListVO> records = result.getRecords().stream().map(DocumentListVO::from).toList();
         return Result.ok(new PageResult<>(result.getTotal(), page, size, records));
     }
 
     @PostMapping("/upload")
-    public Result<DocumentVO> upload(@RequestParam Long spaceId, @RequestParam(required = false) String title,
-                                     @RequestPart("file") MultipartFile file) throws Exception {
-        return Result.ok(DocumentVO.from(uploadService.upload(spaceId, title, file)));
+    public Result<DocumentDetailVO> upload(@RequestParam Long spaceId, @RequestParam(required = false) String title,
+                                           @RequestPart("file") MultipartFile file) throws Exception {
+        return Result.ok(DocumentDetailVO.from(uploadService.upload(spaceId, title, file)));
     }
 
     @GetMapping("/{id}")
-    public Result<DocumentVO> detail(@PathVariable Long id) {
-        return Result.ok(DocumentVO.from(accessService.requireDocument(id)));
+    public Result<DocumentDetailVO> detail(@PathVariable Long id) {
+        return Result.ok(DocumentDetailVO.from(accessService.requireDocument(id)));
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody KbDocument document) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateDocumentRequest request) {
         accessService.requireDocumentManage(id);
         KbDocument update = new KbDocument();
         update.setId(id);
-        update.setTitle(document.getTitle());
-        update.setSummary(document.getSummary());
-        update.setKeywords(document.getKeywords());
+        update.setTitle(request.getTitle());
+        update.setSummary(request.getSummary());
+        update.setKeywords(request.getKeywords());
         documentMapper.updateById(update);
         return Result.ok();
     }

@@ -20,7 +20,9 @@ import com.zhiyan.kb.rag.HybridRetrievalService;
 import com.zhiyan.kb.rag.RetrievalResult;
 import com.zhiyan.kb.vo.ChatAskResponse;
 import com.zhiyan.kb.vo.ChatReferenceVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 @Service
+@Slf4j
 public class ChatServiceImpl implements ChatService {
     private static final double PRIMARY_MIN_SCORE = 0.18;
     private static final double FALLBACK_TRIGGER_SCORE = 0.35;
@@ -49,11 +52,12 @@ public class ChatServiceImpl implements ChatService {
     private final UnresolvedQuestionMapper unresolvedQuestionMapper;
     private final KbSpaceMapper spaceMapper;
     private final ResourceAccessService accessService;
+    private final TransactionTemplate transactionTemplate;
 
     public ChatServiceImpl(ShortTermMemoryService shortTermMemoryService, QueryRewriteService queryRewriteService, LongTermMemoryService longTermMemoryService,
                            HybridRetrievalService retrievalService, PromptBuilder promptBuilder, LLMClient llmClient, AIResponseParser responseParser,
                            ChatRecordMapper chatRecordMapper, UnresolvedQuestionMapper unresolvedQuestionMapper, KbSpaceMapper spaceMapper,
-                           ResourceAccessService accessService) {
+                           ResourceAccessService accessService, TransactionTemplate transactionTemplate) {
         this.shortTermMemoryService = shortTermMemoryService;
         this.queryRewriteService = queryRewriteService;
         this.longTermMemoryService = longTermMemoryService;
@@ -65,6 +69,7 @@ public class ChatServiceImpl implements ChatService {
         this.unresolvedQuestionMapper = unresolvedQuestionMapper;
         this.spaceMapper = spaceMapper;
         this.accessService = accessService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Override
@@ -101,32 +106,10 @@ public class ChatServiceImpl implements ChatService {
                 .map(r -> new ChatReferenceVO(r.getDocumentId(), r.getDocumentTitle(), r.getChunkId(), r.getContent(), r.getFinalScore()))
                 .toList();
 
-        ChatRecord record = new ChatRecord();
-        record.setUserId(userId);
-        record.setSpaceId(resolveRecordSpaceId(effectiveSpaceId, scopeSpaceId));
-        record.setSessionId(sessionId);
-        record.setQuestion(request.getQuestion());
-        record.setRewrittenQuestion(rewritten);
-        record.setAnswer(answer);
-        record.setReferencesJson(JSONUtil.toJsonStr(references));
-        record.setConfidence(BigDecimal.valueOf(confidence));
-        record.setUnresolved(unresolved);
-        record.setFavorite(false);
-        chatRecordMapper.insert(record);
-
-        if (unresolved) {
-            UnresolvedQuestion question = new UnresolvedQuestion();
-            question.setUserId(userId);
-            question.setSpaceId(resolveRecordSpaceId(effectiveSpaceId, scopeSpaceId));
-            question.setQuestion(request.getQuestion());
-            question.setRewrittenQuestion(rewritten);
-            question.setReason("RAG 检索结果为空或低于阈值");
-            question.setStatus("PENDING");
-            unresolvedQuestionMapper.insert(question);
-        }
-        shortTermMemoryService.addMessage(sessionId, userId, "USER", request.getQuestion());
-        shortTermMemoryService.addMessage(sessionId, userId, "ASSISTANT", answer);
-        incrementQaCount(effectiveSpaceId);
+        Long recordSpaceId = resolveRecordSpaceId(effectiveSpaceId, scopeSpaceId);
+        ChatRecord record = persistChatRecord(userId, recordSpaceId, sessionId, request.getQuestion(), rewritten,
+                answer, references, confidence, unresolved);
+        rememberConversation(sessionId, userId, request.getQuestion(), answer);
 
         ChatAskResponse response = new ChatAskResponse();
         response.setAnswer(answer);
@@ -198,8 +181,49 @@ public class ChatServiceImpl implements ChatService {
         return first == null ? 0L : first.getId();
     }
 
+    private ChatRecord persistChatRecord(Long userId, Long recordSpaceId, String sessionId, String question,
+                                         String rewritten, String answer, List<ChatReferenceVO> references,
+                                         double confidence, boolean unresolved) {
+        return transactionTemplate.execute(status -> {
+            ChatRecord record = new ChatRecord();
+            record.setUserId(userId);
+            record.setSpaceId(recordSpaceId);
+            record.setSessionId(sessionId);
+            record.setQuestion(question);
+            record.setRewrittenQuestion(rewritten);
+            record.setAnswer(answer);
+            record.setReferencesJson(JSONUtil.toJsonStr(references));
+            record.setConfidence(BigDecimal.valueOf(confidence));
+            record.setUnresolved(unresolved);
+            record.setFavorite(false);
+            chatRecordMapper.insert(record);
+
+            if (unresolved) {
+                UnresolvedQuestion unresolvedQuestion = new UnresolvedQuestion();
+                unresolvedQuestion.setUserId(userId);
+                unresolvedQuestion.setSpaceId(recordSpaceId);
+                unresolvedQuestion.setQuestion(question);
+                unresolvedQuestion.setRewrittenQuestion(rewritten);
+                unresolvedQuestion.setReason("RAG 检索结果为空或低于阈值");
+                unresolvedQuestion.setStatus("PENDING");
+                unresolvedQuestionMapper.insert(unresolvedQuestion);
+            }
+            incrementQaCount(recordSpaceId);
+            return record;
+        });
+    }
+
+    private void rememberConversation(String sessionId, Long userId, String question, String answer) {
+        try {
+            shortTermMemoryService.addMessage(sessionId, userId, "USER", question);
+            shortTermMemoryService.addMessage(sessionId, userId, "ASSISTANT", answer);
+        } catch (RuntimeException ex) {
+            log.warn("Short-term memory write failed, sessionId={}, userId={}", sessionId, userId, ex);
+        }
+    }
+
     private void incrementQaCount(Long spaceId) {
-        if (spaceId == null) {
+        if (spaceId == null || spaceId <= 0) {
             return;
         }
         spaceMapper.update(null, new LambdaUpdateWrapper<KbSpace>()

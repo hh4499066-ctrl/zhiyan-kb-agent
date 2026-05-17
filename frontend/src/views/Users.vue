@@ -119,7 +119,7 @@ async function save() {
   await load()
 }
 async function status(row: any) {
-  await http.put(`/users/${row.id}/status`, null, { params: { status: row.status === 'ENABLED' ? 'DISABLED' : 'ENABLED' } })
+  await http.put(`/users/${row.id}/status`, { status: row.status === 'ENABLED' ? 'DISABLED' : 'ENABLED' })
   await load()
 }
 async function reset(row: any) {

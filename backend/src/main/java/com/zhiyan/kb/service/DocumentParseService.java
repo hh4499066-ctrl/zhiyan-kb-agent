@@ -1,26 +1,44 @@
 package com.zhiyan.kb.service;
 
-import cn.hutool.core.io.FileUtil;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.stream.Collectors;
 
 @Service
 public class DocumentParseService {
+    private static final int MAX_TEXT_CHARS = 500_000;
+    private static final int MAX_PDF_PAGES = 200;
+    private static final int MAX_DOCX_PARAGRAPHS = 10_000;
+    private static final int MAX_DOCX_TABLES = 200;
+    private static final int MAX_DOCX_TABLE_CELLS = 20_000;
+
     public String parse(File file, String fileType) throws IOException {
         String type = fileType == null ? "" : fileType.toLowerCase(Locale.ROOT);
         return switch (type) {
-            case "txt", "md" -> FileUtil.readString(file, StandardCharsets.UTF_8);
+            case "txt", "md" -> readLimitedText(file);
             case "pdf" -> parsePdfIfAvailable(file);
             case "docx" -> parseDocxIfAvailable(file);
             default -> throw new IOException("Unsupported document type: " + fileType);
         };
+    }
+
+    private String readLimitedText(File file) throws IOException {
+        StringBuilder text = new StringBuilder();
+        char[] buffer = new char[8192];
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                appendLimited(text, new String(buffer, 0, read));
+            }
+        }
+        return text.toString();
     }
 
     private String parsePdfIfAvailable(File file) throws IOException {
@@ -30,9 +48,13 @@ public class DocumentParseService {
             Class<?> stripperClass = Class.forName("org.apache.pdfbox.text.PDFTextStripper");
             Object document = loaderClass.getMethod("loadPDF", File.class).invoke(null, file);
             try {
+                int pages = (Integer) documentClass.getMethod("getNumberOfPages").invoke(document);
+                if (pages > MAX_PDF_PAGES) {
+                    throw new IOException("PDF page count exceeds " + MAX_PDF_PAGES);
+                }
                 Object stripper = stripperClass.getConstructor().newInstance();
                 Method getText = stripperClass.getMethod("getText", documentClass);
-                return String.valueOf(getText.invoke(stripper, document));
+                return requireWithinLimit(String.valueOf(getText.invoke(stripper, document)));
             } finally {
                 documentClass.getMethod("close").invoke(document);
             }
@@ -51,19 +73,30 @@ public class DocumentParseService {
                 Method getParagraphs = documentClass.getMethod("getParagraphs");
                 @SuppressWarnings("unchecked")
                 java.util.List<Object> paragraphs = (java.util.List<Object>) getParagraphs.invoke(document);
-                String paragraphText = paragraphs.stream()
-                        .map(this::invokeGetText)
-                        .filter(text -> text != null && !text.isBlank())
-                        .collect(Collectors.joining("\n\n"));
+                if (paragraphs.size() > MAX_DOCX_PARAGRAPHS) {
+                    throw new IOException("DOCX paragraph count exceeds " + MAX_DOCX_PARAGRAPHS);
+                }
+                StringBuilder text = new StringBuilder();
+                for (Object paragraph : paragraphs) {
+                    appendBlock(text, invokeGetText(paragraph));
+                }
 
                 Method getTables = documentClass.getMethod("getTables");
                 @SuppressWarnings("unchecked")
                 java.util.List<Object> tables = (java.util.List<Object>) getTables.invoke(document);
-                String tableText = tables.stream()
-                        .map(this::tableText)
-                        .filter(text -> !text.isBlank())
-                        .collect(Collectors.joining("\n\n"));
-                return (paragraphText + "\n\n" + tableText).trim();
+                if (tables.size() > MAX_DOCX_TABLES) {
+                    throw new IOException("DOCX table count exceeds " + MAX_DOCX_TABLES);
+                }
+                int cellCount = 0;
+                for (Object table : tables) {
+                    TableText tableText = tableText(table);
+                    cellCount += tableText.cellCount();
+                    if (cellCount > MAX_DOCX_TABLE_CELLS) {
+                        throw new IOException("DOCX table cell count exceeds " + MAX_DOCX_TABLE_CELLS);
+                    }
+                    appendBlock(text, tableText.text());
+                }
+                return text.toString().trim();
             } finally {
                 documentClass.getMethod("close").invoke(document);
             }
@@ -74,23 +107,35 @@ public class DocumentParseService {
         }
     }
 
-    private String tableText(Object table) {
+    private TableText tableText(Object table) {
         try {
             @SuppressWarnings("unchecked")
             java.util.List<Object> rows = (java.util.List<Object>) table.getClass().getMethod("getRows").invoke(table);
-            return rows.stream()
-                    .map(row -> {
-                        try {
-                            @SuppressWarnings("unchecked")
-                            java.util.List<Object> cells = (java.util.List<Object>) row.getClass().getMethod("getTableCells").invoke(row);
-                            return cells.stream().map(this::invokeGetText).collect(Collectors.joining(" | "));
-                        } catch (ReflectiveOperationException ex) {
-                            return "";
+            StringBuilder text = new StringBuilder();
+            int cellCount = 0;
+            for (Object row : rows) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    java.util.List<Object> cells = (java.util.List<Object>) row.getClass().getMethod("getTableCells").invoke(row);
+                    cellCount += cells.size();
+                    StringBuilder rowText = new StringBuilder();
+                    for (Object cell : cells) {
+                        if (!rowText.isEmpty()) {
+                            rowText.append(" | ");
                         }
-                    })
-                    .collect(Collectors.joining("\n"));
+                        rowText.append(invokeGetText(cell));
+                    }
+                    if (!text.isEmpty()) {
+                        text.append('\n');
+                    }
+                    text.append(rowText);
+                } catch (ReflectiveOperationException ex) {
+                    return new TableText("", cellCount);
+                }
+            }
+            return new TableText(text.toString(), cellCount);
         } catch (ReflectiveOperationException ex) {
-            return "";
+            return new TableText("", 0);
         }
     }
 
@@ -101,5 +146,32 @@ public class DocumentParseService {
         } catch (ReflectiveOperationException ex) {
             return "";
         }
+    }
+
+    private void appendBlock(StringBuilder target, String text) throws IOException {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        if (!target.isEmpty()) {
+            appendLimited(target, "\n\n");
+        }
+        appendLimited(target, text.trim());
+    }
+
+    private String requireWithinLimit(String text) throws IOException {
+        if (text != null && text.length() > MAX_TEXT_CHARS) {
+            throw new IOException("Parsed text exceeds " + MAX_TEXT_CHARS + " characters");
+        }
+        return text;
+    }
+
+    private void appendLimited(StringBuilder target, String text) throws IOException {
+        if (target.length() + text.length() > MAX_TEXT_CHARS) {
+            throw new IOException("Parsed text exceeds " + MAX_TEXT_CHARS + " characters");
+        }
+        target.append(text);
+    }
+
+    private record TableText(String text, int cellCount) {
     }
 }

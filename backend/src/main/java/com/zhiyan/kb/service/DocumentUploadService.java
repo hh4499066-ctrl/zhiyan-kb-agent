@@ -8,10 +8,10 @@ import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbSpace;
 import com.zhiyan.kb.mapper.KbDocumentMapper;
 import com.zhiyan.kb.mapper.KbSpaceMapper;
-import com.zhiyan.kb.rag.VectorStoreService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -29,29 +30,29 @@ import java.util.zip.ZipInputStream;
 public class DocumentUploadService {
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of("txt", "md", "pdf", "docx");
     private static final long MAX_UPLOAD_BYTES = 20L * 1024 * 1024;
+    private static final int MAX_DOCX_ENTRY_COUNT = 3000;
+    private static final int MAX_DOCX_ENTRY_NAME_LENGTH = 255;
+    private static final long MAX_DOCX_UNCOMPRESSED_BYTES = 100L * 1024 * 1024;
 
     private final KbDocumentMapper documentMapper;
     private final KbSpaceMapper spaceMapper;
-    private final DocumentParseService parseService;
-    private final ChunkService chunkService;
     private final ResourceAccessService accessService;
-    private final VectorStoreService vectorStoreService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final TransactionTemplate transactionTemplate;
     private final String uploadDir;
 
     public DocumentUploadService(KbDocumentMapper documentMapper, KbSpaceMapper spaceMapper,
-                                 DocumentParseService parseService, ChunkService chunkService,
-                                 ResourceAccessService accessService, VectorStoreService vectorStoreService,
+                                 ResourceAccessService accessService, ApplicationEventPublisher eventPublisher,
+                                 TransactionTemplate transactionTemplate,
                                  @Value("${zhiyan.upload-dir:uploads}") String uploadDir) {
         this.documentMapper = documentMapper;
         this.spaceMapper = spaceMapper;
-        this.parseService = parseService;
-        this.chunkService = chunkService;
         this.accessService = accessService;
-        this.vectorStoreService = vectorStoreService;
+        this.eventPublisher = eventPublisher;
+        this.transactionTemplate = transactionTemplate;
         this.uploadDir = uploadDir;
     }
 
-    @Transactional
     public KbDocument upload(Long spaceId, String title, MultipartFile file) throws Exception {
         validateUpload(spaceId, file);
         accessService.requireSpaceManage(spaceId);
@@ -74,37 +75,37 @@ public class DocumentUploadService {
         }
 
         Path temp = Files.createTempFile(base, "upload-", ".tmp");
-        KbDocument document = new KbDocument();
         try {
             file.transferTo(temp);
-            document.setSpaceId(spaceId);
-            document.setTitle(title == null || title.isBlank() ? FileUtil.mainName(originalFilename) : title);
-            document.setOriginalFilename(originalFilename);
-            document.setFileType(ext);
-            document.setFileSize(file.getSize());
-            document.setFileUrl(fileKey);
-            document.setParseStatus("PARSING");
-            document.setVectorStatus("PROCESSING");
-            document.setStatus("NORMAL");
-            document.setUploaderId(UserContext.userId());
-            documentMapper.insert(document);
-
-            document.setContentText(parseService.parse(temp.toFile(), ext));
-            Files.move(temp, target);
-            chunkService.rebuildChunks(document);
-            document.setParseStatus("SUCCESS");
-            document.setVectorStatus("SUCCESS");
-            documentMapper.updateById(document);
-            incrementDocumentCount(spaceId);
+            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            KbDocument document = createDocument(spaceId, title, originalFilename, ext, file.getSize(), fileKey);
+            eventPublisher.publishEvent(new DocumentProcessingEvent(document.getId(), target, ext));
             return document;
         } catch (Exception ex) {
             cleanupFile(temp);
             cleanupFile(target);
-            if (document.getId() != null) {
-                vectorStoreService.removeByDocumentId(document.getId());
-            }
             throw ex;
         }
+    }
+
+    private KbDocument createDocument(Long spaceId, String title, String originalFilename, String ext, long fileSize,
+                                      String fileKey) {
+        return transactionTemplate.execute(status -> {
+            KbDocument document = new KbDocument();
+            document.setSpaceId(spaceId);
+            document.setTitle(title == null || title.isBlank() ? FileUtil.mainName(originalFilename) : title);
+            document.setOriginalFilename(originalFilename);
+            document.setFileType(ext);
+            document.setFileSize(fileSize);
+            document.setFileUrl(fileKey);
+            document.setParseStatus("UPLOADED");
+            document.setVectorStatus("PENDING");
+            document.setStatus("NORMAL");
+            document.setUploaderId(UserContext.userId());
+            documentMapper.insert(document);
+            incrementDocumentCount(spaceId);
+            return document;
+        });
     }
 
     private void validateUpload(Long spaceId, MultipartFile file) {
@@ -137,21 +138,35 @@ public class DocumentUploadService {
     public static boolean hasRequiredDocxEntries(InputStream input) throws IOException {
         boolean hasContentTypes = false;
         boolean hasDocumentXml = false;
+        int entryCount = 0;
+        long totalUncompressedBytes = 0;
+        byte[] buffer = new byte[8192];
         try (ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
+                entryCount++;
+                if (entryCount > MAX_DOCX_ENTRY_COUNT) {
+                    throw new BusinessException(400, "DOCX file is too complex");
+                }
                 String name = entry.getName();
+                if (name.length() > MAX_DOCX_ENTRY_NAME_LENGTH) {
+                    throw new BusinessException(400, "DOCX entry name is too long");
+                }
                 if ("[Content_Types].xml".equals(name)) {
                     hasContentTypes = true;
                 } else if ("word/document.xml".equals(name)) {
                     hasDocumentXml = true;
                 }
-                if (hasContentTypes && hasDocumentXml) {
-                    return true;
+                int read;
+                while ((read = zip.read(buffer)) != -1) {
+                    totalUncompressedBytes += read;
+                    if (totalUncompressedBytes > MAX_DOCX_UNCOMPRESSED_BYTES) {
+                        throw new BusinessException(400, "DOCX file expands too large");
+                    }
                 }
             }
         }
-        return false;
+        return hasContentTypes && hasDocumentXml;
     }
 
     private static boolean startsWith(byte[] data, byte[] prefix) {
