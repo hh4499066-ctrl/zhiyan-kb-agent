@@ -7,8 +7,8 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/zhiyan_kb_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
-    username: ${MYSQL_USERNAME:}
-    password: ${MYSQL_PASSWORD:}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:123456}
   data:
     redis:
       host: localhost
@@ -30,7 +30,7 @@ mybatis-plus:
       id-type: auto
 
 zhiyan:
-  demo-accounts-enabled: ${ZHIYAN_DEMO_ACCOUNTS_ENABLED:false}
+  demo-accounts-enabled: ${ZHIYAN_DEMO_ACCOUNTS_ENABLED:true}
   ai:
     mode: ${ZHIYAN_AI_MODE:mock}
     provider: deepseek

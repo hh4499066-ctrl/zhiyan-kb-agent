@@ -14,18 +14,33 @@
       </div>
 
       <div class="hero-dashboard" aria-hidden="true">
-        <div class="hero-chart">
-          <div class="chart-head">
-            <span>问答质量趋势</span>
+        <div class="knowledge-panel">
+          <div class="panel-head">
+            <span>Knowledge Recall</span>
             <b>92%</b>
           </div>
-          <div class="chart-line">
-            <i style="height: 42%"></i>
-            <i style="height: 62%"></i>
-            <i style="height: 50%"></i>
-            <i style="height: 76%"></i>
-            <i style="height: 68%"></i>
-            <i style="height: 88%"></i>
+          <div class="knowledge-map">
+            <svg viewBox="0 0 460 190" role="presentation" focusable="false">
+              <defs>
+                <linearGradient id="edgeGradient" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#14d7c3" />
+                  <stop offset="100%" stop-color="#3b82f6" />
+                </linearGradient>
+              </defs>
+              <path d="M86 100 C132 48 174 42 216 48 S290 48 334 48" />
+              <path d="M86 100 C134 148 188 150 236 144 S302 144 354 144" />
+              <path d="M214 48 C242 76 256 92 286 104 S344 108 404 104" />
+              <path d="M226 144 C254 126 278 114 310 108 S362 104 404 104" />
+            </svg>
+            <span class="node node-primary">AI</span>
+            <span class="node node-docs">Docs</span>
+            <span class="node node-faq">FAQ</span>
+            <span class="node node-memory">Memory</span>
+            <span class="node node-search">RAG</span>
+            <div class="query-card">
+              <small>Query</small>
+              <strong>研发规范检索</strong>
+            </div>
           </div>
         </div>
         <div class="insight-grid">
@@ -51,7 +66,7 @@
           <template #prefix><el-icon><User /></el-icon></template>
         </el-input>
       </el-form-item>
-      <el-form-item label="密码">
+      <el-form-item label="密　码">
         <el-input
           v-model="form.password"
           size="large"
@@ -66,9 +81,18 @@
       <el-button class="login-button" type="primary" size="large" :loading="loading" native-type="submit">
         登录平台
       </el-button>
-      <div v-if="showDemoAccounts" class="samples">
+      <div class="samples">
         <span>演示账号：admin / manager / zhangsan / newcomer</span>
         <b>密码均为 123456</b>
+      </div>
+      <div class="demo-accounts">
+        <span>演示账号密码</span>
+        <div class="sample-grid">
+          <b>admin / 123456</b>
+          <b>manager / 123456</b>
+          <b>zhangsan / 123456</b>
+          <b>newcomer / 123456</b>
+        </div>
       </div>
       <div class="security-row">
         <span>安全审计开启</span>
@@ -190,10 +214,14 @@ async function submit() {
 .hero-copy h1 {
   max-width: 640px;
   margin: 0;
-  color: #fff;
+  color: transparent;
   font-size: clamp(40px, 5vw, 64px);
   font-weight: 850;
   line-height: 1.05;
+  background: linear-gradient(112deg, #ffffff 0%, #dffdf8 36%, #48d6c8 64%, #7aa7ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: 0 18px 44px rgba(18, 191, 174, 0.16);
 }
 
 .hero-copy p {
@@ -213,46 +241,147 @@ async function submit() {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
 }
 
-.hero-chart {
+.knowledge-panel {
+  position: relative;
+  overflow: hidden;
   padding: 22px;
-  border: 1px solid #214a5e;
+  border: 1px solid rgba(20, 215, 195, 0.28);
   border-radius: 8px;
-  background: #102c40;
+  background:
+    linear-gradient(135deg, rgba(20, 215, 195, 0.08), rgba(59, 130, 246, 0.05)),
+    #102c40;
 }
 
-.chart-head,
+.knowledge-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.78), transparent);
+  pointer-events: none;
+}
+
+.panel-head,
 .insight-grid {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
 
-.chart-head span,
+.panel-head span,
 .insight-grid span {
   color: #94a3b8;
   font-size: 13px;
 }
 
-.chart-head b {
+.panel-head b {
   color: #12bfae;
   font-size: 24px;
 }
 
-.chart-line {
-  height: 154px;
-  display: flex;
-  align-items: end;
-  gap: 18px;
-  margin-top: 28px;
-  border-bottom: 1px solid #214a5e;
+.knowledge-map {
+  position: relative;
+  height: 190px;
+  margin-top: 14px;
 }
 
-.chart-line i {
-  width: 32px;
-  border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, #12bfae, #2563eb);
-  animation: bar-grow 620ms var(--ease-out) both;
+.knowledge-map svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.knowledge-map path {
+  fill: none;
+  stroke: url(#edgeGradient);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.68;
+  stroke-dasharray: 7 9;
+  animation: flow-line 3.2s linear infinite;
+}
+
+.node {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(20, 215, 195, 0.38);
+  border-radius: 8px;
+  background: rgba(7, 20, 38, 0.88);
+  color: #dffdf8;
+  box-shadow: 0 12px 28px rgba(18, 191, 174, 0.14);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.node-primary {
+  left: 38px;
+  top: 74px;
+  width: 68px;
+  height: 52px;
+  background: linear-gradient(135deg, #12bfae, #2563eb);
+  color: #fff;
+  font-size: 18px;
+}
+
+.node-docs {
+  left: 146px;
+  top: 18px;
+  width: 74px;
+  height: 38px;
+}
+
+.node-faq {
+  left: 156px;
+  bottom: 20px;
+  width: 66px;
+  height: 38px;
+}
+
+.node-memory {
+  left: 258px;
+  bottom: 22px;
+  width: 96px;
+  height: 38px;
+}
+
+.node-search {
+  right: 20px;
+  top: 82px;
+  width: 70px;
+  height: 44px;
+}
+
+.query-card {
+  position: absolute;
+  left: 246px;
+  top: 18px;
+  min-width: 128px;
+  padding: 12px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.42);
+  border-radius: 8px;
+  background: rgba(8, 24, 44, 0.9);
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.14);
+}
+
+.query-card small {
+  display: block;
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.query-card strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 14px;
 }
 
 .insight-grid {
@@ -300,6 +429,11 @@ async function submit() {
   color: #647084;
 }
 
+.login-card :deep(.el-form-item__label) {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
 .login-button {
   width: 100%;
   height: 48px;
@@ -307,19 +441,40 @@ async function submit() {
 }
 
 .samples {
+  display: none;
+}
+
+.demo-accounts {
   margin-top: 18px;
-  color: #647084;
-  font-size: 13px;
-  line-height: 1.7;
+  padding: 14px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
 }
 
-.samples span,
-.samples b {
+.demo-accounts span {
   display: block;
+  margin-bottom: 10px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 850;
 }
 
-.samples b {
-  color: #111827;
+.sample-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.sample-grid b {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #eef6ff;
+  color: #0f3a66;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .security-row {
@@ -338,16 +493,12 @@ async function submit() {
   font-weight: 800;
 }
 
-@keyframes bar-grow {
+@keyframes flow-line {
   from {
-    transform: scaleY(0.4);
-    transform-origin: bottom;
-    opacity: 0;
+    stroke-dashoffset: 0;
   }
   to {
-    transform: scaleY(1);
-    transform-origin: bottom;
-    opacity: 1;
+    stroke-dashoffset: -32;
   }
 }
 
