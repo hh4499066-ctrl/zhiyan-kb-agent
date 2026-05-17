@@ -7,6 +7,8 @@ import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
 import com.zhiyan.kb.rag.VectorStoreService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
@@ -73,6 +75,20 @@ public class ChunkService {
         chunkMapper.update(null, new UpdateWrapper<KbDocumentChunk>()
                 .eq("document_id", documentId)
                 .set("status", "DISABLED"));
+        removeVectorsAfterCommit(documentId);
+    }
+
+    private void removeVectorsAfterCommit(Long documentId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    vectorStoreService.removeByDocumentId(documentId);
+                }
+            });
+            return;
+        }
         vectorStoreService.removeByDocumentId(documentId);
     }
 

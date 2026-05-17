@@ -7,6 +7,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 
 @Slf4j
@@ -26,10 +27,11 @@ public class LoginRateLimitService {
 
     public void assertAllowed(String username, String clientIp) {
         try {
-            String key = key(username, clientIp);
-            String value = redisTemplate.opsForValue().get(key);
-            if (value != null && Integer.parseInt(value) >= maxFailures) {
-                throw new BusinessException(429, "Too many failed login attempts. Try again later");
+            for (String key : keys(username, clientIp)) {
+                String value = redisTemplate.opsForValue().get(key);
+                if (value != null && Integer.parseInt(value) >= maxFailures) {
+                    throw new BusinessException(429, "Too many failed login attempts. Try again later");
+                }
             }
         } catch (BusinessException ex) {
             throw ex;
@@ -40,10 +42,11 @@ public class LoginRateLimitService {
 
     public void recordFailure(String username, String clientIp) {
         try {
-            String key = key(username, clientIp);
-            Long failures = redisTemplate.opsForValue().increment(key);
-            if (failures != null && failures == 1L) {
-                redisTemplate.expire(key, lockDuration);
+            for (String key : keys(username, clientIp)) {
+                Long failures = redisTemplate.opsForValue().increment(key);
+                if (failures != null && failures == 1L) {
+                    redisTemplate.expire(key, lockDuration);
+                }
             }
         } catch (RuntimeException ex) {
             log.warn("Login rate-limit failure record failed", ex);
@@ -52,15 +55,16 @@ public class LoginRateLimitService {
 
     public void clear(String username, String clientIp) {
         try {
-            redisTemplate.delete(key(username, clientIp));
+            redisTemplate.delete(keys(username, clientIp));
         } catch (RuntimeException ex) {
             log.warn("Login rate-limit clear failed", ex);
         }
     }
 
-    private String key(String username, String clientIp) {
+    private List<String> keys(String username, String clientIp) {
         String normalizedUsername = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
         String normalizedIp = clientIp == null || clientIp.isBlank() ? "unknown" : clientIp.trim();
-        return "login_fail:" + normalizedUsername + ":" + normalizedIp;
+        return List.of("login_fail:user:" + normalizedUsername,
+                "login_fail:user_ip:" + normalizedUsername + ":" + normalizedIp);
     }
 }

@@ -5,6 +5,7 @@ target/
 node_modules/
 dist/
 .DS_Store
+.codex-temp/
 backend/uploads/
 *.log
 frontend/.env.local

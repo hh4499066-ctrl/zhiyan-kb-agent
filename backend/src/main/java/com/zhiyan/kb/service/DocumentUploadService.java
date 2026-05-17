@@ -4,8 +4,10 @@ import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zhiyan.kb.common.BusinessException;
 import com.zhiyan.kb.common.UserContext;
+import com.zhiyan.kb.entity.DocumentProcessingTask;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbSpace;
+import com.zhiyan.kb.mapper.DocumentProcessingTaskMapper;
 import com.zhiyan.kb.mapper.KbDocumentMapper;
 import com.zhiyan.kb.mapper.KbSpaceMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,17 +37,20 @@ public class DocumentUploadService {
     private static final long MAX_DOCX_UNCOMPRESSED_BYTES = 100L * 1024 * 1024;
 
     private final KbDocumentMapper documentMapper;
+    private final DocumentProcessingTaskMapper taskMapper;
     private final KbSpaceMapper spaceMapper;
     private final ResourceAccessService accessService;
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
     private final String uploadDir;
 
-    public DocumentUploadService(KbDocumentMapper documentMapper, KbSpaceMapper spaceMapper,
+    public DocumentUploadService(KbDocumentMapper documentMapper, DocumentProcessingTaskMapper taskMapper,
+                                 KbSpaceMapper spaceMapper,
                                  ResourceAccessService accessService, ApplicationEventPublisher eventPublisher,
                                  TransactionTemplate transactionTemplate,
                                  @Value("${zhiyan.upload-dir:uploads}") String uploadDir) {
         this.documentMapper = documentMapper;
+        this.taskMapper = taskMapper;
         this.spaceMapper = spaceMapper;
         this.accessService = accessService;
         this.eventPublisher = eventPublisher;
@@ -78,9 +83,10 @@ public class DocumentUploadService {
         try {
             file.transferTo(temp);
             Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
-            KbDocument document = createDocument(spaceId, title, originalFilename, ext, file.getSize(), fileKey);
-            eventPublisher.publishEvent(new DocumentProcessingEvent(document.getId(), target, ext));
-            return document;
+            UploadedDocument uploaded = createDocument(spaceId, title, originalFilename, ext, file.getSize(), fileKey);
+            eventPublisher.publishEvent(new DocumentProcessingEvent(uploaded.task().getId(),
+                    uploaded.document().getId(), target, ext));
+            return uploaded.document();
         } catch (Exception ex) {
             cleanupFile(temp);
             cleanupFile(target);
@@ -88,8 +94,8 @@ public class DocumentUploadService {
         }
     }
 
-    private KbDocument createDocument(Long spaceId, String title, String originalFilename, String ext, long fileSize,
-                                      String fileKey) {
+    private UploadedDocument createDocument(Long spaceId, String title, String originalFilename, String ext,
+                                            long fileSize, String fileKey) {
         return transactionTemplate.execute(status -> {
             KbDocument document = new KbDocument();
             document.setSpaceId(spaceId);
@@ -103,9 +109,22 @@ public class DocumentUploadService {
             document.setStatus("NORMAL");
             document.setUploaderId(UserContext.userId());
             documentMapper.insert(document);
+            DocumentProcessingTask task = createTask(document.getId(), fileKey, ext);
+            taskMapper.insert(task);
             incrementDocumentCount(spaceId);
-            return document;
+            return new UploadedDocument(document, task);
         });
+    }
+
+    private DocumentProcessingTask createTask(Long documentId, String fileKey, String fileType) {
+        DocumentProcessingTask task = new DocumentProcessingTask();
+        task.setDocumentId(documentId);
+        task.setFileUrl(fileKey);
+        task.setFileType(fileType);
+        task.setStatus("PENDING");
+        task.setRetryCount(0);
+        task.setMaxRetries(3);
+        return task;
     }
 
     private void validateUpload(Long spaceId, MultipartFile file) {
@@ -193,5 +212,8 @@ public class DocumentUploadService {
         spaceMapper.update(null, new LambdaUpdateWrapper<KbSpace>()
                 .eq(KbSpace::getId, spaceId)
                 .setSql("document_count = COALESCE(document_count, 0) + 1"));
+    }
+
+    private record UploadedDocument(KbDocument document, DocumentProcessingTask task) {
     }
 }

@@ -14,6 +14,7 @@ import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
 import com.zhiyan.kb.mapper.KbDocumentMapper;
 import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.service.ChunkService;
+import com.zhiyan.kb.service.DocumentProcessingService;
 import com.zhiyan.kb.service.DocumentUploadService;
 import com.zhiyan.kb.service.ResourceAccessService;
 import com.zhiyan.kb.vo.DocumentDetailVO;
@@ -46,11 +47,12 @@ public class DocumentController {
     private final LLMClient llmClient;
     private final ResourceAccessService accessService;
     private final DocumentUploadService uploadService;
+    private final DocumentProcessingService processingService;
 
     public DocumentController(KbDocumentMapper documentMapper, KbDocumentChunkMapper chunkMapper,
                               KbFaqMapper faqMapper, ChunkService chunkService,
                               LLMClient llmClient, ResourceAccessService accessService,
-                              DocumentUploadService uploadService) {
+                              DocumentUploadService uploadService, DocumentProcessingService processingService) {
         this.documentMapper = documentMapper;
         this.chunkMapper = chunkMapper;
         this.faqMapper = faqMapper;
@@ -58,6 +60,7 @@ public class DocumentController {
         this.llmClient = llmClient;
         this.accessService = accessService;
         this.uploadService = uploadService;
+        this.processingService = processingService;
     }
 
     @GetMapping
@@ -120,17 +123,7 @@ public class DocumentController {
     @PostMapping("/{id}/parse")
     public Result<Void> parse(@PathVariable Long id) {
         KbDocument document = accessService.requireDocumentManage(id);
-        try {
-            chunkService.rebuildChunks(document);
-            document.setParseStatus("SUCCESS");
-            document.setVectorStatus("SUCCESS");
-            documentMapper.updateById(document);
-        } catch (Exception ex) {
-            document.setParseStatus("FAILED");
-            document.setVectorStatus("FAILED");
-            documentMapper.updateById(document);
-            throw ex;
-        }
+        processingService.requestReprocess(document);
         return Result.ok();
     }
 

@@ -49,6 +49,9 @@ zhiyan:
     token-expire-hours: 2
     login-max-failures: ${ZHIYAN_LOGIN_MAX_FAILURES:5}
     login-lock-minutes: ${ZHIYAN_LOGIN_LOCK_MINUTES:10}
+    trusted-proxies: ${ZHIYAN_TRUSTED_PROXIES:}
+  document-processing:
+    retry-delay-ms: ${ZHIYAN_DOCUMENT_PROCESSING_RETRY_DELAY_MS:60000}
   memory:
     ttl-minutes: 120
     window-size: 6

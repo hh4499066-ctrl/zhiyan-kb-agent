@@ -7,14 +7,17 @@ import com.zhiyan.kb.common.LoginUser;
 import com.zhiyan.kb.common.RoleNames;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.dto.UpdateDocumentRequest;
+import com.zhiyan.kb.entity.DocumentProcessingTask;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
 import com.zhiyan.kb.mapper.KbDocumentMapper;
 import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.mapper.KbSpaceMapper;
+import com.zhiyan.kb.mapper.DocumentProcessingTaskMapper;
 import com.zhiyan.kb.service.ChunkService;
 import com.zhiyan.kb.service.DocumentUploadService;
 import com.zhiyan.kb.service.DocumentProcessingEvent;
+import com.zhiyan.kb.service.DocumentProcessingService;
 import com.zhiyan.kb.service.ResourceAccessService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.AfterEach;
@@ -42,6 +45,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -124,15 +128,16 @@ class DocumentControllerTest {
         LLMClient llmClient = mock(LLMClient.class);
         ResourceAccessService accessService = mock(ResourceAccessService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        DocumentProcessingTaskMapper taskMapper = mock(DocumentProcessingTaskMapper.class);
         doAnswer(invocation -> {
             KbDocument document = invocation.getArgument(0);
             document.setId(100L);
             return 1;
         }).when(documentMapper).insert(any(KbDocument.class));
-        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, spaceMapper, accessService,
+        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, taskMapper, spaceMapper, accessService,
                 eventPublisher, transactionTemplate(), tempDir.toString());
         MockMvc mvc = mockMvc(new DocumentController(documentMapper, chunkMapper, faqMapper,
-                chunkService, llmClient, accessService, uploadService));
+                chunkService, llmClient, accessService, uploadService, mock(DocumentProcessingService.class)));
         login();
 
         mvc.perform(multipart("/api/documents/upload")
@@ -141,6 +146,7 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.code").value(200));
 
         verify(documentMapper).insert(any(KbDocument.class));
+        verify(taskMapper).insert(any(DocumentProcessingTask.class));
         verify(eventPublisher).publishEvent(any(DocumentProcessingEvent.class));
     }
 
@@ -152,10 +158,12 @@ class DocumentControllerTest {
         KbDocumentMapper documentMapper = mock(KbDocumentMapper.class);
         KbSpaceMapper spaceMapper = mock(KbSpaceMapper.class);
         ChunkService chunkService = mock(ChunkService.class);
-        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, spaceMapper, accessService,
+        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, mock(DocumentProcessingTaskMapper.class),
+                spaceMapper, accessService,
                 mock(ApplicationEventPublisher.class), transactionTemplate(), tempDir.toString());
         MockMvc mvc = mockMvc(new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
-                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService, uploadService));
+                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService, uploadService,
+                mock(DocumentProcessingService.class)));
 
         mvc.perform(multipart("/api/documents/upload")
                         .file(new MockMultipartFile("file", "note.txt", "text/plain", "hello".getBytes()))
@@ -174,7 +182,7 @@ class DocumentControllerTest {
         ChunkService chunkService = mock(ChunkService.class);
         DocumentController controller = new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
                 mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService,
-                mock(DocumentUploadService.class));
+                mock(DocumentUploadService.class), mock(DocumentProcessingService.class));
         UpdateDocumentRequest request = new UpdateDocumentRequest();
         request.setTitle("moved");
         request.setSummary("summary");
@@ -198,6 +206,28 @@ class DocumentControllerTest {
         assertThat(update.getUploaderId()).isNull();
     }
 
+    @Test
+    void parseQueuesFullReprocessInsteadOfRebuildingChunksInline() {
+        KbDocumentMapper documentMapper = mock(KbDocumentMapper.class);
+        ResourceAccessService accessService = mock(ResourceAccessService.class);
+        KbDocument existing = new KbDocument();
+        existing.setId(10L);
+        existing.setFileUrl("doc.txt");
+        existing.setFileType("txt");
+        when(accessService.requireDocumentManage(10L)).thenReturn(existing);
+        ChunkService chunkService = mock(ChunkService.class);
+        DocumentProcessingService processingService = mock(DocumentProcessingService.class);
+        DocumentController controller = new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
+                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService,
+                mock(DocumentUploadService.class), processingService);
+
+        controller.parse(10L);
+
+        verify(processingService).requestReprocess(existing);
+        verify(chunkService, never()).rebuildChunks(any());
+        verify(documentMapper, never()).updateById(any(KbDocument.class));
+    }
+
     private byte[] zip(String... names) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
@@ -215,10 +245,12 @@ class DocumentControllerTest {
         KbSpaceMapper spaceMapper = mock(KbSpaceMapper.class);
         ChunkService chunkService = mock(ChunkService.class);
         ResourceAccessService accessService = mock(ResourceAccessService.class);
-        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, spaceMapper, accessService,
+        DocumentUploadService uploadService = new DocumentUploadService(documentMapper, mock(DocumentProcessingTaskMapper.class),
+                spaceMapper, accessService,
                 mock(ApplicationEventPublisher.class), transactionTemplate(), tempDir.toString());
         return mockMvc(new DocumentController(documentMapper, mock(KbDocumentChunkMapper.class),
-                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService, uploadService));
+                mock(KbFaqMapper.class), chunkService, mock(LLMClient.class), accessService, uploadService,
+                mock(DocumentProcessingService.class)));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

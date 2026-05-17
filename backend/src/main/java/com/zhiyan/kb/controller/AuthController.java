@@ -21,8 +21,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -35,15 +37,18 @@ public class AuthController {
     private final TokenUtil tokenUtil;
     private final LoginRateLimitService loginRateLimitService;
     private final boolean demoAccountsEnabled;
+    private final Set<String> trustedProxies;
 
     public AuthController(SysUserMapper userMapper, BCryptPasswordEncoder passwordEncoder, TokenUtil tokenUtil,
                           LoginRateLimitService loginRateLimitService,
-                          @Value("${zhiyan.demo-accounts-enabled:false}") boolean demoAccountsEnabled) {
+                          @Value("${zhiyan.demo-accounts-enabled:false}") boolean demoAccountsEnabled,
+                          @Value("${zhiyan.auth.trusted-proxies:}") String trustedProxies) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.tokenUtil = tokenUtil;
         this.loginRateLimitService = loginRateLimitService;
         this.demoAccountsEnabled = demoAccountsEnabled;
+        this.trustedProxies = parseTrustedProxies(trustedProxies);
     }
 
     @PostMapping("/login")
@@ -103,14 +108,26 @@ public class AuthController {
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
+        if (trustedProxies.contains(request.getRemoteAddr())) {
+            String forwardedFor = request.getHeader("X-Forwarded-For");
+            if (forwardedFor != null && !forwardedFor.isBlank()) {
+                return forwardedFor.split(",")[0].trim();
+            }
+            String realIp = request.getHeader("X-Real-IP");
+            if (realIp != null && !realIp.isBlank()) {
+                return realIp.trim();
+            }
         }
         return request.getRemoteAddr();
+    }
+
+    private Set<String> parseTrustedProxies(String value) {
+        if (value == null || value.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .collect(Collectors.toUnmodifiableSet());
     }
 }
