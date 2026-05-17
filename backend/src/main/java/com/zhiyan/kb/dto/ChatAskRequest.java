@@ -11,4 +11,5 @@ public class ChatAskRequest {
     private String question;
     private Boolean useMemory = true;
     private Integer topK = 5;
+    private String model;
 }

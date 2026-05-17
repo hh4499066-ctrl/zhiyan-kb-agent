@@ -2,8 +2,8 @@
   <div class="page dashboard-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">运营概览</h2>
-        <p class="page-subtitle">跟踪知识空间、文档解析、问答质量和待补充知识。</p>
+        <h2 class="page-title">知识运营驾驶舱</h2>
+        <p class="page-subtitle">把空间、文档、问答和沉淀问题集中到一张可行动视图。</p>
       </div>
       <div class="page-actions">
         <el-button v-if="aiConfig" class="ai-mode-button" @click="aiDialogVisible = true">
@@ -17,46 +17,35 @@
     </div>
 
     <div v-loading="loading" class="metric-grid">
-      <section v-for="s in stats" :key="s.label" class="metric-card">
-        <div class="metric-icon" :class="s.tone">
-          <el-icon><component :is="s.icon" /></el-icon>
+      <section v-for="s in featuredStats" :key="s.label" class="metric-card" :class="s.tone">
+        <span>{{ s.label }}</span>
+        <div class="metric-value">
+          <strong>{{ s.value }}</strong>
+          <em :class="['trend', s.trend >= 0 ? 'up' : 'down']">{{ s.trend >= 0 ? '+' : '-' }}{{ Math.abs(s.trend) }}%</em>
         </div>
-        <div>
-          <span>{{ s.label }}</span>
-          <div class="metric-value">
-            <strong>{{ s.value }}</strong>
-            <em :class="['trend', s.trend >= 0 ? 'up' : 'down']">{{ s.trend >= 0 ? '↑' : '↓' }} {{ Math.abs(s.trend) }}%</em>
-          </div>
-          <small>{{ s.hint }}</small>
-        </div>
+        <small>{{ s.hint }}</small>
       </section>
     </div>
 
-    <section class="filter-bar">
-      <div class="range-control">
-        <span>时间范围：</span>
-        <el-select model-value="7" style="width: 132px">
-          <el-option label="近 7 天" value="7" />
-          <el-option label="近 30 天" value="30" />
-        </el-select>
-        <el-button @click="loadData">刷新</el-button>
-      </div>
-      <div class="range-control">
-        <span>粒度：</span>
-        <el-select model-value="day" style="width: 118px">
-          <el-option label="按天" value="day" />
-          <el-option label="按周" value="week" />
-        </el-select>
-      </div>
-    </section>
-
     <div class="chart-grid">
       <section class="panel chart-panel">
-        <h3>问答趋势</h3>
+        <div class="section-heading">
+          <div>
+            <h3>问答质量趋势</h3>
+            <p>近 7 天 · 自动刷新</p>
+          </div>
+          <el-tag round>RAG</el-tag>
+        </div>
         <div ref="qaChart" class="chart"></div>
       </section>
       <section class="panel chart-panel">
-        <h3>部门文档贡献</h3>
+        <div class="section-heading">
+          <div>
+            <h3>知识沉淀趋势</h3>
+            <p>部门文档贡献与活跃度</p>
+          </div>
+          <el-tag round type="success">Live</el-tag>
+        </div>
         <div ref="deptChart" class="chart"></div>
       </section>
     </div>
@@ -64,8 +53,11 @@
     <div class="bottom-grid">
       <section class="panel">
         <div class="section-heading">
-          <h3>热门问题 Top 10</h3>
-          <el-tag round>按次数排序</el-tag>
+          <div>
+            <h3>热门问题 Top 10</h3>
+            <p>按最近问答次数排序</p>
+          </div>
+          <el-tag round>高频</el-tag>
         </div>
         <el-table :data="overview.topQuestions || []">
           <el-table-column type="index" width="72" />
@@ -75,20 +67,20 @@
           </el-table-column>
         </el-table>
       </section>
-      <section class="panel quick-panel">
-        <h3>快捷操作</h3>
-        <el-button type="primary" @click="$router.push('/chat')">
-          <el-icon><ChatDotRound /></el-icon>
-          发起问答
-        </el-button>
-        <el-button @click="$router.push('/documents')">
-          <el-icon><Document /></el-icon>
-          管理文档
-        </el-button>
-        <el-button @click="$router.push('/unresolved')">
-          <el-icon><Warning /></el-icon>
-          处理未解决问题
-        </el-button>
+      <section class="panel priority-panel">
+        <div class="section-heading">
+          <div>
+            <h3>今日优先处理</h3>
+            <p>低置信、无命中和知识缺口</p>
+          </div>
+        </div>
+        <div class="priority-list">
+          <button v-for="item in priorities" :key="item.title" type="button" @click="$router.push(item.to)">
+            <span :class="item.tone">{{ item.label }}</span>
+            <strong>{{ item.title }}</strong>
+            <small>{{ item.desc }}</small>
+          </button>
+        </div>
       </section>
     </div>
 
@@ -109,7 +101,7 @@
 <script setup lang="ts">
 import * as echarts from 'echarts'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ChatDotRound, Collection, DataLine, Document, Files, Refresh, Tickets, TrendCharts, Warning } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { http } from '../api'
 
 const overview = ref<any>({})
@@ -121,15 +113,22 @@ let qaInstance: echarts.ECharts | undefined
 let deptInstance: echarts.ECharts | undefined
 
 const loading = ref(false)
-const stats = computed(() => [
-  { label: '知识空间', value: overview.value.spaceCount || 0, hint: '可检索空间', icon: Collection, tone: 'mint', trend: 4 },
-  { label: '文档总数', value: overview.value.documentCount || 0, hint: '已纳入资产', icon: Document, tone: 'blue', trend: 8 },
-  { label: 'Chunk 总数', value: overview.value.chunkCount || 0, hint: '语义片段', icon: Files, tone: 'violet', trend: 6 },
-  { label: '问答次数', value: overview.value.qaCount || 0, hint: '累计请求', icon: ChatDotRound, tone: 'mint', trend: 12 },
-  { label: '今日问答', value: overview.value.todayQaCount || 0, hint: '今日请求', icon: TrendCharts, tone: 'amber', trend: 5 },
-  { label: '未解决问题', value: overview.value.unresolvedCount || 0, hint: '待补充知识', icon: Warning, tone: 'rose', trend: -3 },
-  { label: '满意度', value: `${overview.value.satisfactionRate || 0}%`, hint: '反馈质量', icon: Tickets, tone: 'blue', trend: 2 },
-  { label: '平均响应', value: '0ms', hint: '当前统计', icon: DataLine, tone: 'violet', trend: 0 }
+const allStats = computed(() => [
+  { label: '知识空间', value: overview.value.spaceCount || 0, hint: '可检索空间', tone: 'teal', trend: 4 },
+  { label: '文档总量', value: overview.value.documentCount || 0, hint: '已纳入资产', tone: 'blue', trend: 8 },
+  { label: '问答次数', value: overview.value.qaCount || 0, hint: '累计请求', tone: 'violet', trend: 12 },
+  { label: '未解决问题', value: overview.value.unresolvedCount || 0, hint: '待补充知识', tone: 'amber', trend: -3 },
+  { label: 'Chunk 总数', value: overview.value.chunkCount || 0, hint: '语义片段', tone: 'blue', trend: 6 },
+  { label: '今日问答', value: overview.value.todayQaCount || 0, hint: '今日请求', tone: 'teal', trend: 5 },
+  { label: '满意度', value: `${overview.value.satisfactionRate || 0}%`, hint: '反馈质量', tone: 'blue', trend: 2 }
+])
+const featuredStats = computed(() => allStats.value.slice(0, 4))
+
+const priorities = computed(() => [
+  { label: '高优先级', title: '处理未解决问题', desc: `${overview.value.unresolvedCount || 0} 条待补充`, tone: 'rose', to: '/unresolved' },
+  { label: '待审核', title: '复盘问答质量', desc: '查看低分反馈与引用来源', tone: 'blue', to: '/records' },
+  { label: '知识沉淀', title: '维护 FAQ', desc: '从文档生成候选答案', tone: 'teal', to: '/faqs' },
+  { label: '训练路径', title: '生成新人计划', desc: '面向岗位推荐文档', tone: 'amber', to: '/onboarding' }
 ])
 
 const aiModeName = computed(() => aiConfig.value?.mode === 'real' ? 'DeepSeek 真实调用' : 'Mock 演示模式')
@@ -153,24 +152,42 @@ function renderCharts() {
 
   qaInstance?.dispose()
   deptInstance?.dispose()
-  qaInstance = echarts.init(qaChart.value!)
-  deptInstance = echarts.init(deptChart.value!)
+  if (!qaChart.value || !deptChart.value) return
+  qaInstance = echarts.init(qaChart.value)
+  deptInstance = echarts.init(deptChart.value)
 
   qaInstance.setOption({
-    legend: { top: 0, right: 8, data: ['问答次数'] },
-    grid: { top: 30, right: 16, bottom: 32, left: 38 },
+    animationDuration: 620,
+    animationEasing: 'cubicOut',
+    grid: { top: 18, right: 16, bottom: 32, left: 38 },
     tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: trend.map((x: any) => x.date), axisLine: { lineStyle: { color: '#d8e5ea' } } },
+    xAxis: { type: 'category', data: trend.map((x: any) => x.date), axisLine: { lineStyle: { color: '#dce4ee' } } },
     yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf2f5', type: 'dashed' } } },
-    series: [{ name: '问答次数', type: 'line', smooth: true, data: trend.map((x: any) => x.count), color: '#10b6a6', areaStyle: { color: 'rgba(16, 182, 166, 0.12)' } }]
+    series: [{
+      name: '问答次数',
+      type: 'line',
+      smooth: true,
+      data: trend.map((x: any) => x.count),
+      color: '#12bfae',
+      areaStyle: { color: 'rgba(18, 191, 174, 0.12)' },
+      symbolSize: 8
+    }]
   })
   deptInstance.setOption({
-    legend: { top: 0, right: 8, data: ['文档数'] },
-    grid: { top: 30, right: 16, bottom: 32, left: 38 },
+    animationDuration: 620,
+    animationEasing: 'cubicOut',
+    grid: { top: 18, right: 16, bottom: 32, left: 38 },
     tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: departments.map((x: any) => x.name), axisLine: { lineStyle: { color: '#d8e5ea' } } },
+    xAxis: { type: 'category', data: departments.map((x: any) => x.name), axisLine: { lineStyle: { color: '#dce4ee' } } },
     yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf2f5', type: 'dashed' } } },
-    series: [{ name: '文档数', type: 'bar', data: departments.map((x: any) => x.count), color: '#6376f2', barWidth: 24, itemStyle: { borderRadius: [6, 6, 0, 0] } }]
+    series: [{
+      name: '文档数',
+      type: 'bar',
+      data: departments.map((x: any) => x.count),
+      color: '#2563eb',
+      barWidth: 24,
+      itemStyle: { borderRadius: [6, 6, 0, 0] }
+    }]
   })
 }
 
@@ -197,147 +214,187 @@ onBeforeUnmount(() => {
 .ai-mode-button {
   border-color: #bdece5;
   background: #effbf8;
-  color: #079989;
+  color: #087d75;
 }
 
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 22px;
 }
 
 .metric-card {
-  min-height: 112px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px;
-  border: 1px solid rgba(214, 229, 234, 0.92);
+  position: relative;
+  min-height: 118px;
+  padding: 20px 22px;
+  overflow: hidden;
+  border: 1px solid rgba(220, 228, 238, 0.92);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow-soft);
+  transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), border-color 180ms var(--ease-out);
+  animation: card-in 220ms var(--ease-out) both;
 }
 
-.metric-icon {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  font-size: 22px;
+.metric-card:hover {
+  transform: translateY(-3px);
 }
 
-.metric-icon.mint { background: #d9fbef; color: #079989; }
-.metric-icon.blue { background: #dfeaff; color: #2563eb; }
-.metric-icon.violet { background: #ece6ff; color: #7c3aed; }
-.metric-icon.amber { background: #fff1cc; color: #d97706; }
-.metric-icon.rose { background: #ffe1e6; color: #e11d48; }
+.metric-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #12bfae;
+}
+
+.metric-card.blue::before { background: #2563eb; }
+.metric-card.violet::before { background: #7057ff; }
+.metric-card.amber::before { background: #f59e0b; }
 
 .metric-card span,
 .metric-card small {
   display: block;
-  color: #667085;
+  color: #647084;
 }
 
 .metric-card span {
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .metric-card strong {
-  display: block;
-  margin-top: 2px;
-  color: #132033;
-  font-size: 28px;
+  color: #111827;
+  font-size: 32px;
   line-height: 1.1;
 }
 
 .metric-value {
   display: flex;
   align-items: baseline;
-  gap: 9px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .trend {
-  font-style: normal;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #e6fbf7;
+  color: #087d75;
   font-size: 12px;
-  font-weight: 800;
-}
-
-.trend.up {
-  color: #079989;
+  font-style: normal;
+  font-weight: 850;
 }
 
 .trend.down {
-  color: #e11d48;
+  background: #fff7e6;
+  color: #b45309;
 }
 
 .metric-card small {
-  margin-top: 5px;
-  font-size: 13px;
-}
-
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 22px;
-  padding: 18px;
-  border: 1px solid rgba(214, 229, 234, 0.92);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow-soft);
-}
-
-.range-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #475569;
+  margin-top: 10px;
+  font-size: 12px;
 }
 
 .chart-grid,
 .bottom-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
+  gap: 22px;
   margin-top: 22px;
-}
-
-.chart-panel h3,
-.section-heading h3,
-.quick-panel h3 {
-  margin: 0;
-  color: #132033;
-  font-size: 18px;
-}
-
-.chart {
-  height: 300px;
 }
 
 .section-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 14px;
   margin-bottom: 12px;
 }
 
-.quick-panel {
+.section-heading h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.section-heading p {
+  margin: 5px 0 0;
+  color: #647084;
+  font-size: 12px;
+}
+
+.chart {
+  height: 280px;
+}
+
+.priority-list {
   display: grid;
-  align-content: start;
   gap: 12px;
 }
 
-.quick-panel .el-button {
-  justify-content: flex-start;
+.priority-list button {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 4px;
   width: 100%;
-  margin-left: 0;
+  padding: 14px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #f9fbfd;
+  text-align: left;
+  transition: transform 160ms var(--ease-out), border-color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+
+.priority-list button:hover {
+  border-color: rgba(18, 191, 174, 0.45);
+  background: #fff;
+  transform: translateY(-2px);
+}
+
+.priority-list span {
+  grid-row: span 2;
+  align-self: center;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #eaf1ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.priority-list .rose { background: #fff1f2; color: #e5484d; }
+.priority-list .teal { background: #e6fbf7; color: #087d75; }
+.priority-list .amber { background: #fff7e6; color: #b45309; }
+
+.priority-list strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.priority-list small {
+  color: #647084;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 1180px) {
-  .metric-grid {
+  .metric-grid,
+  .chart-grid,
+  .bottom-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -347,12 +404,6 @@ onBeforeUnmount(() => {
   .chart-grid,
   .bottom-grid {
     grid-template-columns: 1fr;
-  }
-
-  .filter-bar,
-  .range-control {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .page-actions {

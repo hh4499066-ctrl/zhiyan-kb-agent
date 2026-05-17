@@ -10,6 +10,23 @@
     <div class="toolbar">
       <el-button type="danger" :disabled="!selectedRows.length" @click="removeSelected"><el-icon><Delete /></el-icon>批量删除</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>部门数</span>
+        <strong>{{ rows.length }}</strong>
+        <small>组织结构覆盖</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>启用部门</span>
+        <strong>{{ enabledCount }}</strong>
+        <small>参与权限与统计归属</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>已选择</span>
+        <strong>{{ selectedRows.length }}</strong>
+        <small>可执行批量操作</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows" row-key="id" @selection-change="selectedRows = $event">
         <el-table-column type="selection" width="46" />
@@ -59,6 +76,7 @@ const loading = ref(false)
 const visible = ref(false)
 const form = reactive<any>({})
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const enabledCount = computed(() => rows.value.filter((row) => row.status !== 'DISABLED').length)
 async function load() { loading.value = true; try { rows.value = await http.get('/departments'); page.value = 1 } finally { loading.value = false } }
 function open(row?: any) { Object.keys(form).forEach((k) => delete form[k]); Object.assign(form, row || { parentId: 0, status: 'ENABLED' }); visible.value = true }
 async function save() { form.id ? await http.put(`/departments/${form.id}`, form) : await http.post('/departments', form); visible.value = false; await load() }

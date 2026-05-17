@@ -11,6 +11,23 @@
       <el-input v-model="keyword" placeholder="搜索知识空间" style="width:260px" clearable />
       <el-button type="primary" @click="load"><el-icon><Search /></el-icon>搜索</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>空间数</span>
+        <strong>{{ rows.length }}</strong>
+        <small>按团队、项目和权限组织</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>文档总量</span>
+        <strong>{{ documentTotal }}</strong>
+        <small>已归属到知识空间</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>问答次数</span>
+        <strong>{{ qaTotal }}</strong>
+        <small>空间内累计请求</small>
+      </article>
+    </div>
     <div v-loading="loading" class="space-grid">
       <el-card v-for="s in pagedRows" :key="s.id" class="space-card" shadow="never">
         <div class="space-card__head">
@@ -64,6 +81,8 @@ const loading = ref(false)
 const visible = ref(false)
 const form = reactive<any>({})
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const documentTotal = computed(() => rows.value.reduce((sum, row) => sum + Number(row.documentCount || 0), 0))
+const qaTotal = computed(() => rows.value.reduce((sum, row) => sum + Number(row.qaCount || 0), 0))
 async function load() { loading.value = true; try { rows.value = await http.get('/spaces', { params: { keyword: keyword.value } }); page.value = 1 } finally { loading.value = false } }
 function open(row?: any) { Object.keys(form).forEach((k) => delete form[k]); Object.assign(form, row || { visibility: 'PUBLIC', status: 'NORMAL' }); visible.value = true }
 async function save() { form.id ? await http.put(`/spaces/${form.id}`, form) : await http.post('/spaces', form); visible.value = false; await load() }

@@ -7,6 +7,23 @@
       </div>
       <el-button type="primary" @click="open()"><el-icon><Plus /></el-icon>新增记忆</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>记忆总量</span>
+        <strong>{{ rows.length }}</strong>
+        <small>跨会话个性化上下文</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>身份记忆</span>
+        <strong>{{ identityCount }}</strong>
+        <small>用于角色化回答</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>项目记忆</span>
+        <strong>{{ projectCount }}</strong>
+        <small>用于研发背景召回</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows">
         <el-table-column label="类型" width="160">
@@ -52,6 +69,8 @@ const visible = ref(false)
 const form = reactive<any>({})
 const types = ['PREFERENCE', 'IDENTITY', 'PROJECT', 'OTHER']
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const identityCount = computed(() => rows.value.filter((row) => row.memoryType === 'IDENTITY').length)
+const projectCount = computed(() => rows.value.filter((row) => row.memoryType === 'PROJECT').length)
 async function load() { loading.value = true; try { rows.value = await http.get('/memories'); page.value = 1 } finally { loading.value = false } }
 function open(row?: any) { Object.keys(form).forEach((k) => delete form[k]); Object.assign(form, row || { memoryType: 'PREFERENCE' }); visible.value = true }
 async function save() { form.id ? await http.put(`/memories/${form.id}`, form) : await http.post('/memories', form); visible.value = false; await load() }

@@ -17,6 +17,23 @@
       <el-button @click="load"><el-icon><Refresh /></el-icon>刷新</el-button>
       <el-button type="danger" :disabled="!selectedRows.length" @click="removeSelected"><el-icon><Delete /></el-icon>批量删除</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>文档总量</span>
+        <strong>{{ rows.length }}</strong>
+        <small>上传后进入解析流水线</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>已解析</span>
+        <strong>{{ parsedCount }}</strong>
+        <small>可被摘要和分块</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>已向量化</span>
+        <strong>{{ vectorizedCount }}</strong>
+        <small>可参与混合检索</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows" stripe @selection-change="selectedRows = $event">
         <el-table-column type="selection" width="46" />
@@ -75,6 +92,8 @@ const drawerTitle = ref('')
 const drawerText = ref('')
 const chunkRows = ref<any[]>([])
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const parsedCount = computed(() => rows.value.filter((row) => row.parseStatus === 'PARSED').length)
+const vectorizedCount = computed(() => rows.value.filter((row) => row.vectorStatus === 'VECTORIZED').length)
 
 async function loadSpaces() { spaces.value = await http.get('/spaces'); if (!spaceId.value) spaceId.value = Number(route.query.spaceId || spaces.value[0]?.id) }
 async function load() { loading.value = true; try { rows.value = await http.get('/documents', { params: { spaceId: spaceId.value } }); page.value = 1 } finally { loading.value = false } }

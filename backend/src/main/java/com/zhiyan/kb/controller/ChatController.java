@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,17 +67,29 @@ public class ChatController {
         List<ChatRecord> records = recordMapper.selectList(query);
         Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
         for (ChatRecord record : records) {
-            grouped.computeIfAbsent(record.getSessionId(), sessionId -> {
-                Map<String, Object> session = new LinkedHashMap<>();
-                session.put("sessionId", sessionId);
-                String question = record.getQuestion() == null ? "New chat" : record.getQuestion();
-                session.put("title", question.length() > 18 ? question.substring(0, 18) + "..." : question);
-                session.put("spaceId", record.getSpaceId());
-                session.put("updateTime", record.getCreateTime());
-                return session;
+            Map<String, Object> session = grouped.computeIfAbsent(record.getSessionId(), sessionId -> {
+                Map<String, Object> newSession = new LinkedHashMap<>();
+                newSession.put("sessionId", sessionId);
+                newSession.put("spaceId", record.getSpaceId());
+                newSession.put("updateTime", record.getCreateTime());
+                newSession.put("_firstQuestionTime", record.getCreateTime());
+                newSession.put("title", titleOf(record.getQuestion()));
+                return newSession;
             });
+            LocalDateTime firstQuestionTime = (LocalDateTime) session.get("_firstQuestionTime");
+            if (firstQuestionTime == null || record.getCreateTime().isBefore(firstQuestionTime)) {
+                session.put("_firstQuestionTime", record.getCreateTime());
+                session.put("title", titleOf(record.getQuestion()));
+            }
         }
-        return Result.ok(new ArrayList<>(grouped.values()));
+        List<Map<String, Object>> sessions = new ArrayList<>(grouped.values());
+        sessions.forEach(session -> session.remove("_firstQuestionTime"));
+        return Result.ok(sessions);
+    }
+
+    private String titleOf(String question) {
+        String title = question == null || question.isBlank() ? "New chat" : question.trim();
+        return title.length() > 18 ? title.substring(0, 18) + "..." : title;
     }
 
     @PostMapping("/sessions")

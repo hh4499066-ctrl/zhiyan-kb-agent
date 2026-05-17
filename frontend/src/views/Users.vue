@@ -12,6 +12,23 @@
       <el-button type="primary" @click="load"><el-icon><Search /></el-icon>搜索</el-button>
       <el-button :disabled="!selectedRows.length" @click="exportSelected"><el-icon><Download /></el-icon>导出所选</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>用户总数</span>
+        <strong>{{ rows.length }}</strong>
+        <small>当前筛选结果</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>管理员</span>
+        <strong>{{ adminCount }}</strong>
+        <small>拥有系统级权限</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>已停用</span>
+        <strong>{{ disabledCount }}</strong>
+        <small>需要复核的账号</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows" stripe @selection-change="selectedRows = $event">
         <el-table-column type="selection" width="46" />
@@ -77,6 +94,8 @@ const visible = ref(false)
 const roles = ['admin', 'kb_manager', 'employee', 'newcomer']
 const form = reactive<any>({})
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const adminCount = computed(() => rows.value.filter((row) => row.role === 'admin').length)
+const disabledCount = computed(() => rows.value.filter((row) => row.status === 'DISABLED').length)
 
 async function load() {
   loading.value = true

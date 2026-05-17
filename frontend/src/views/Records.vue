@@ -7,6 +7,23 @@
       </div>
       <el-button @click="load"><el-icon><Refresh /></el-icon>刷新</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>记录总量</span>
+        <strong>{{ rows.length }}</strong>
+        <small>可追踪历史问答</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>平均置信度</span>
+        <strong>{{ averageConfidence }}%</strong>
+        <small>基于当前分页集合</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>未解决</span>
+        <strong>{{ unresolvedCount }}</strong>
+        <small>可转入知识补充</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows">
         <el-table-column prop="question" label="问题" min-width="220" show-overflow-tooltip />
@@ -43,6 +60,12 @@ const page = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const unresolvedCount = computed(() => rows.value.filter((row) => row.unresolved === true || row.unresolved === 1).length)
+const averageConfidence = computed(() => {
+  const values = rows.value.map((row) => Number(row.confidence || 0)).filter((value) => Number.isFinite(value))
+  if (!values.length) return 0
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+})
 async function load() { loading.value = true; try { rows.value = await http.get('/chat/records'); page.value = 1 } finally { loading.value = false } }
 async function feedback(row: any, helpful: boolean) {
   await http.post(`/chat/records/${row.id}/feedback`, { helpful, comment: helpful ? '有帮助' : '需要补充' })

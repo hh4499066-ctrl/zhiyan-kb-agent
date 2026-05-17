@@ -4,6 +4,7 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.zhiyan.kb.common.BusinessException;
+import com.zhiyan.kb.dto.ChatMemoryMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -12,12 +13,15 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
 @Component
 public class DeepSeekLLMClient implements LLMClient {
+    private static final List<String> CHAT_MODEL_ALLOWLIST = List.of("deepseek-v4-flash", "deepseek-v4-pro");
     private final AiProperties properties;
     private final RestClient restClient;
 
@@ -34,19 +38,31 @@ public class DeepSeekLLMClient implements LLMClient {
 
     @Override
     public String complete(String prompt) {
+        return complete(prompt, List.of());
+    }
+
+    @Override
+    public String complete(String prompt, List<ChatMemoryMessage> context) {
+        return complete(prompt, context, null);
+    }
+
+    @Override
+    public String complete(String prompt, List<ChatMemoryMessage> context, String model) {
         String apiKey = properties.cleanApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new BusinessException("Real AI mode is enabled, but DEEPSEEK_API_KEY is not configured");
         }
+        String chatModel = resolveChatModel(model);
+        List<Map<String, Object>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", "You are an enterprise R&D knowledge-base AI assistant. Prioritize the provided knowledge context. If no relevant knowledge-base context is provided, answer using your general model capability and clearly state that there is no knowledge-base source. Never fabricate citations. Long-term memories in the user prompt describe the current logged-in user, not you. Never adopt the user's name, identity, preferences, or project background as your own."));
+        appendContextMessages(messages, context);
+        messages.add(Map.of("role", "user", "content", prompt));
         Map<String, Object> request = Map.of(
-                "model", properties.cleanChatModel(),
+                "model", chatModel,
                 "temperature", properties.getTemperature(),
                 "max_tokens", properties.getMaxTokens(),
                 "stream", false,
-                "messages", List.of(
-                        Map.of("role", "system", "content", "You are an enterprise R&D knowledge-base AI assistant. Answer based on the provided knowledge context. Long-term memories in the user prompt describe the current logged-in user, not you. Never adopt the user's name, identity, preferences, or project background as your own."),
-                        Map.of("role", "user", "content", prompt)
-                )
+                "messages", messages
         );
         int maxAttempts = Math.max(1, properties.getMaxRetries() + 1);
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -59,7 +75,7 @@ public class DeepSeekLLMClient implements LLMClient {
                         .body(request)
                         .retrieve()
                         .body(String.class);
-                log.info("DeepSeek request succeeded model={} elapsedMs={}", properties.cleanChatModel(), System.currentTimeMillis() - started);
+                log.info("DeepSeek request succeeded model={} elapsedMs={}", chatModel, System.currentTimeMillis() - started);
                 return parseContent(response);
             } catch (RestClientResponseException ex) {
                 handleHttpError(ex, attempt, maxAttempts);
@@ -121,6 +137,43 @@ public class DeepSeekLLMClient implements LLMClient {
             throw new BusinessException("DeepSeek response contains no message.content");
         }
         return content.trim();
+    }
+
+    private String resolveChatModel(String model) {
+        String requested = model == null ? "" : model.trim();
+        if (requested.isBlank()) {
+            return properties.cleanChatModel();
+        }
+        if (!CHAT_MODEL_ALLOWLIST.contains(requested)) {
+            throw new BusinessException(400, "Unsupported chat model: " + requested);
+        }
+        return requested;
+    }
+
+    private void appendContextMessages(List<Map<String, Object>> messages, List<ChatMemoryMessage> context) {
+        if (context == null || context.isEmpty()) {
+            return;
+        }
+        context.stream()
+                .filter(message -> message.getContent() != null && !message.getContent().isBlank())
+                .forEach(message -> {
+                    String role = normalizeRole(message.getRole());
+                    if (role != null) {
+                        messages.add(Map.of("role", role, "content", message.getContent()));
+                    }
+                });
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null) {
+            return null;
+        }
+        return switch (role.toUpperCase(Locale.ROOT)) {
+            case "USER" -> "user";
+            case "ASSISTANT" -> "assistant";
+            case "SYSTEM" -> "system";
+            default -> null;
+        };
     }
 
     private String trimTrailingSlash(String url) {

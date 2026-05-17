@@ -86,8 +86,8 @@ public class ChatServiceImpl implements ChatService {
             effectiveSpaceId = retrievalResults.get(0).getSpaceId();
         }
         boolean unresolved = retrievalResults.isEmpty();
-        String prompt = promptBuilder.buildChatPrompt(request.getQuestion(), rewritten, longMemories, context, retrievalResults);
-        String answer = responseParser.compact(llmClient.complete(prompt));
+        String prompt = promptBuilder.buildChatPrompt(request.getQuestion(), rewritten, longMemories, retrievalResults);
+        String answer = responseParser.compact(llmClient.complete(prompt, context, request.getModel()));
         double confidence = unresolved ? 0.25 : Math.min(0.95, retrievalResults.get(0).getFinalScore() + 0.35);
         List<ChatReferenceVO> references = retrievalResults.stream()
                 .map(r -> new ChatReferenceVO(r.getDocumentId(), r.getDocumentTitle(), r.getChunkId(), r.getContent(), r.getFinalScore()))

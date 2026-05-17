@@ -10,6 +10,23 @@
       <el-input v-model="moduleName" placeholder="模块名，如 documents/chat" style="width: 260px" clearable />
       <el-button type="primary" @click="load"><el-icon><Search /></el-icon>查询</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>日志总量</span>
+        <strong>{{ rows.length }}</strong>
+        <small>关键写操作审计</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>模块数</span>
+        <strong>{{ moduleCount }}</strong>
+        <small>覆盖业务模块</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>操作用户</span>
+        <strong>{{ userCount }}</strong>
+        <small>按用户 ID 去重</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows" stripe>
         <el-table-column prop="createTime" label="时间" width="180" />
@@ -38,6 +55,8 @@ const page = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const moduleCount = computed(() => new Set(rows.value.map((row) => row.moduleName).filter(Boolean)).size)
+const userCount = computed(() => new Set(rows.value.map((row) => row.userId).filter(Boolean)).size)
 
 async function load() {
   loading.value = true

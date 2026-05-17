@@ -9,8 +9,8 @@ public class MockLLMClient implements LLMClient {
         if (prompt == null) {
             return "当前知识库中没有找到明确答案，已记录为未解决问题。";
         }
-        if (prompt.contains("没有检索到知识片段")) {
-            return "当前知识库中没有找到明确答案，已记录为未解决问题。建议知识库管理员补充相关研发文档后再进行问答。";
+        if (prompt.contains("未检索到相关知识库片段")) {
+            return "未检索到相关知识库来源，以下基于模型通用能力回答：这个问题当前没有可引用的企业知识库资料，因此只能给出通用建议。请结合实际业务背景判断；如果这是企业内部规范或项目专有问题，建议后续补充对应文档。\n\n引用来源：无\n置信度：较低\n是否需要补充文档：是";
         }
         if (prompt.contains("生成FAQ") || prompt.contains("FAQ")) {
             return "Q1：这篇文档主要解决什么问题？\nA1：它用于沉淀团队研发规范、操作步骤和常见问题。\n\nQ2：新人应该如何阅读？\nA2：先阅读摘要，再按步骤完成本地验证，最后结合 FAQ 复盘。";

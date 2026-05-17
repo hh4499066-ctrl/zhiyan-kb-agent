@@ -18,7 +18,13 @@
         :collapse="isMainNavCollapse"
         :collapse-transition="false"
       >
-        <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
+        <el-menu-item
+          v-for="item in menus"
+          :key="item.path"
+          :index="item.path"
+          class="nav-item"
+          :style="{ '--nav-accent': item.accent }"
+        >
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
         </el-menu-item>
@@ -63,7 +69,13 @@
       </el-header>
 
       <el-main class="main">
-        <router-view />
+        <router-view v-slot="{ Component, route }">
+          <transition name="route-fade" mode="out-in">
+            <keep-alive>
+              <component :is="Component" :key="route.path" />
+            </keep-alive>
+          </transition>
+        </router-view>
       </el-main>
     </el-container>
   </el-container>
@@ -73,38 +85,38 @@
 import { computed, ref } from 'vue'
 import {
   ArrowDown,
-  ChatDotRound,
-  Clock,
-  Collection,
+  Box,
+  ChatSquare,
+  Connection,
   DataBoard,
-  Document,
   Expand,
   Fold,
-  Guide,
-  Memo,
-  Notebook,
+  FolderOpened,
+  HelpFilled,
   OfficeBuilding,
-  Tickets,
-  User,
-  Warning
+  Operation,
+  Opportunity,
+  Stopwatch,
+  UserFilled,
+  WarningFilled
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../store'
 
 const auth = useAuthStore()
 const isMainNavCollapse = ref(false)
 const allMenus = [
-  { path: '/dashboard', title: '仪表盘', icon: DataBoard },
-  { path: '/users', title: '用户管理', icon: User, roles: ['admin'] },
-  { path: '/departments', title: '部门管理', icon: OfficeBuilding, roles: ['admin'] },
-  { path: '/spaces', title: '知识空间', icon: Collection },
-  { path: '/documents', title: '文档管理', icon: Document },
-  { path: '/chat', title: '智能问答', icon: ChatDotRound },
-  { path: '/memories', title: '长期记忆', icon: Memo },
-  { path: '/faqs', title: 'FAQ 管理', icon: Tickets },
-  { path: '/onboarding', title: '新人助手', icon: Guide },
-  { path: '/unresolved', title: '未解决问题', icon: Warning },
-  { path: '/records', title: '问答记录', icon: Clock },
-  { path: '/operation-logs', title: '操作日志', icon: Notebook, roles: ['admin'] }
+  { path: '/dashboard', title: '仪表盘', icon: DataBoard, accent: '#12bfae' },
+  { path: '/chat', title: '智能问答', icon: ChatSquare, accent: '#38bdf8' },
+  { path: '/records', title: '问答记录', icon: Stopwatch, accent: '#60a5fa' },
+  { path: '/memories', title: '长期记忆', icon: Connection, accent: '#a78bfa' },
+  { path: '/spaces', title: '知识空间', icon: Box, accent: '#34d399' },
+  { path: '/onboarding', title: '新人助手', icon: Opportunity, accent: '#fbbf24' },
+  { path: '/users', title: '用户管理', icon: UserFilled, accent: '#93c5fd', roles: ['admin'] },
+  { path: '/departments', title: '部门管理', icon: OfficeBuilding, accent: '#c4b5fd', roles: ['admin'] },
+  { path: '/documents', title: '文档管理', icon: FolderOpened, accent: '#22c55e' },
+  { path: '/faqs', title: 'FAQ 管理', icon: HelpFilled, accent: '#f59e0b' },
+  { path: '/unresolved', title: '未解决问题', icon: WarningFilled, accent: '#fb7185' },
+  { path: '/operation-logs', title: '操作日志', icon: Operation, accent: '#94a3b8', roles: ['admin'] }
 ]
 
 const menus = computed(() => allMenus.filter((m) => !m.roles || m.roles.includes(auth.user?.role || '')))
@@ -120,9 +132,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 <style scoped>
 .shell {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 30% 16%, rgba(23, 214, 192, 0.18), transparent 24%),
-    linear-gradient(135deg, #f7fbfb 0%, #edf8f6 46%, #f8fafc 100%);
+  background: #f6f8fb;
 }
 
 .aside {
@@ -132,11 +142,10 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  border-right: 1px solid #e1edf1;
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(18px);
+  border-right: 1px solid #1d3c52;
+  background: #071426;
   overflow: hidden;
-  transition: width 0.3s ease;
+  transition: width 280ms var(--ease-out);
 }
 
 .logo {
@@ -145,9 +154,9 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   align-items: center;
   gap: 14px;
   padding: 0 22px;
-  color: #071426;
+  color: #fff;
   overflow: hidden;
-  transition: padding 0.3s ease, justify-content 0.3s ease;
+  transition: padding 280ms var(--ease-out), justify-content 280ms var(--ease-out);
 }
 
 .logo-mark {
@@ -157,10 +166,11 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   place-items: center;
   flex: 0 0 auto;
   border-radius: 8px;
-  background: #071426;
-  color: #32dec9;
+  border: 1px solid #1d3c52;
+  background: #0f2335;
+  color: #12bfae;
   font-weight: 900;
-  box-shadow: 0 10px 28px rgba(6, 20, 38, 0.16);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
 }
 
 .logo strong,
@@ -181,7 +191,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 
 .logo span {
   margin-top: 2px;
-  color: #667085;
+  color: #94a3b8;
   font-size: 12px;
 }
 
@@ -190,7 +200,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   border-right: 0;
   padding: 10px 12px;
   background: transparent;
-  transition: width 0.3s ease, padding 0.3s ease;
+  transition: width 280ms var(--ease-out), padding 280ms var(--ease-out);
 }
 
 .nav-menu:not(.el-menu--collapse) {
@@ -210,16 +220,17 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   justify-content: flex-start;
   column-gap: 10px;
   border-radius: 8px;
-  color: #536174;
+  color: #94a3b8;
   font-weight: 650;
   padding: 0 12px !important;
-  transition: color 200ms ease, background-color 200ms ease, transform 200ms ease, box-shadow 200ms ease, padding 0.3s ease;
+  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), padding 280ms var(--ease-out);
 }
 
 .nav-menu :deep(.el-menu-item .el-icon) {
   width: 28px;
   margin: 0;
-  transition: transform 0.3s ease;
+  color: #8da2bd;
+  transition: transform 280ms var(--ease-out);
 }
 
 .nav-menu :deep(.el-menu-item span) {
@@ -227,19 +238,26 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   overflow: hidden;
   opacity: 1;
   transform: translateX(0);
-  transition: opacity 0.18s ease 0.08s, transform 0.3s ease;
+  transition: opacity 180ms var(--ease-out) 80ms, transform 280ms var(--ease-out);
 }
 
 .nav-menu :deep(.el-menu-item.is-active) {
-  color: #079989;
-  background: #e9fbf7;
+  color: #fff;
+  background: #112b3e;
+  box-shadow: inset 0 0 0 1px #1d3c52;
 }
 
 .nav-menu :deep(.el-menu-item:hover) {
-  color: #079989;
-  background: #f1fbf9;
+  color: #fff;
+  background: #10283a;
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(16, 182, 166, 0.1);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.nav-menu :deep(.el-menu-item.is-active .el-icon),
+.nav-menu :deep(.el-menu-item:hover .el-icon) {
+  color: var(--nav-accent, #12bfae);
+  transform: scale(1.08);
 }
 
 .aside-footer {
@@ -247,8 +265,8 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border-top: 1px solid #e6eef2;
-  transition: padding 0.3s ease;
+  border-top: 1px solid #1d3c52;
+  transition: padding 280ms var(--ease-out);
 }
 
 .mini-card {
@@ -256,15 +274,15 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  border: 1px solid #dbe9ed;
+  border: 1px solid #1d3c52;
   border-radius: 8px;
-  background: #f7fffd;
-  color: #667085;
+  background: #0f2335;
+  color: #94a3b8;
   font-size: 13px;
 }
 
 .mini-card strong {
-  color: #079989;
+  color: #12bfae;
   font-size: 18px;
 }
 
@@ -273,17 +291,17 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   height: 38px;
   display: grid;
   place-items: center;
-  border: 1px solid #dbe9ed;
+  border: 1px solid #1d3c52;
   border-radius: 8px;
-  background: #fff;
-  color: #536174;
-  transition: border-color 200ms ease, color 200ms ease, background-color 200ms ease;
+  background: #0f2335;
+  color: #94a3b8;
+  transition: border-color 180ms var(--ease-out), color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
 
 .main-nav-toggle:hover {
-  border-color: #10b6a6;
-  background: #effbf8;
-  color: #079989;
+  border-color: #12bfae;
+  background: #112b3e;
+  color: #12bfae;
 }
 
 .aside-collapsed .logo {
@@ -319,7 +337,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 .content-shell {
   flex: 1 1 auto;
   min-width: 0;
-  transition: flex-grow 0.3s ease;
+  transition: flex-grow 280ms var(--ease-out);
 }
 
 .header {
@@ -328,21 +346,21 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  border-bottom: 1px solid rgba(219, 232, 238, 0.9);
-  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid rgba(220, 228, 238, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(18px);
 }
 
 .header h1 {
   margin: 0;
-  color: #132033;
+  color: #111827;
   font-size: 22px;
   font-weight: 850;
 }
 
 .header p {
   margin: 4px 0 0;
-  color: #667085;
+  color: #647084;
   font-size: 13px;
 }
 
@@ -359,7 +377,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   gap: 10px;
   border: 0;
   background: transparent;
-  color: #132033;
+  color: #111827;
 }
 
 .user-menu strong,
@@ -373,7 +391,7 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
 }
 
 .user-menu small {
-  color: #667085;
+  color: #647084;
 }
 
 .avatar {
@@ -382,17 +400,20 @@ const avatarText = computed(() => (auth.user?.realName || auth.user?.username ||
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: linear-gradient(135deg, #2ddfca, #0b958a);
-  color: #fff;
+  background: #e6fbf7;
+  border: 1px solid #12bfae;
+  color: #087d75;
+  box-shadow: 0 8px 20px rgba(18, 191, 174, 0.16);
   font-weight: 850;
 }
 
 .main {
   min-height: calc(100vh - 78px);
   padding: 0;
+  background-color: #f6f8fb;
   background-image:
-    linear-gradient(rgba(18, 107, 113, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(18, 107, 113, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(18, 107, 113, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 107, 113, 0.035) 1px, transparent 1px);
   background-size: 78px 78px;
 }
 

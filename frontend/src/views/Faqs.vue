@@ -13,6 +13,23 @@
       </el-select>
       <el-button type="danger" :disabled="!selectedRows.length" @click="removeSelected"><el-icon><Delete /></el-icon>批量删除</el-button>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat">
+        <span>FAQ 总量</span>
+        <strong>{{ rows.length }}</strong>
+        <small>标准答案资产</small>
+      </article>
+      <article class="mini-stat blue">
+        <span>AI 生成</span>
+        <strong>{{ aiCount }}</strong>
+        <small>来自文档或问题沉淀</small>
+      </article>
+      <article class="mini-stat amber">
+        <span>已选择</span>
+        <strong>{{ selectedRows.length }}</strong>
+        <small>可批量维护</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows" @selection-change="selectedRows = $event">
         <el-table-column type="selection" width="46" />
@@ -65,6 +82,7 @@ const loading = ref(false)
 const visible = ref(false)
 const form = reactive<any>({})
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const aiCount = computed(() => rows.value.filter((row) => String(row.createType || '').toUpperCase() !== 'MANUAL').length)
 async function load() { loading.value = true; try { rows.value = await http.get('/faqs', { params: { spaceId: spaceId.value } }); page.value = 1 } finally { loading.value = false } }
 function open(row?: any) { Object.keys(form).forEach((k) => delete form[k]); Object.assign(form, row || { spaceId: spaceId.value || spaces.value[0]?.id, createType: 'MANUAL' }); visible.value = true }
 async function save() { form.id ? await http.put(`/faqs/${form.id}`, form) : await http.post('/faqs', form); visible.value = false; await load() }

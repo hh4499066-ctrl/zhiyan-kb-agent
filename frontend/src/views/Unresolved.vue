@@ -15,6 +15,23 @@
         <el-option label="已忽略" value="IGNORED" />
       </el-select>
     </div>
+    <div class="stat-strip">
+      <article class="mini-stat amber">
+        <span>待处理</span>
+        <strong>{{ pendingCount }}</strong>
+        <small>需要补充或关联知识</small>
+      </article>
+      <article class="mini-stat">
+        <span>已解决</span>
+        <strong>{{ resolvedCount }}</strong>
+        <small>完成知识闭环</small>
+      </article>
+      <article class="mini-stat rose">
+        <span>已忽略</span>
+        <strong>{{ ignoredCount }}</strong>
+        <small>非知识库问题</small>
+      </article>
+    </div>
     <section v-loading="loading" class="panel">
       <el-table :data="pagedRows">
         <el-table-column prop="question" label="问题" min-width="220" show-overflow-tooltip />
@@ -50,6 +67,9 @@ const page = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const pendingCount = computed(() => rows.value.filter((row) => row.status === 'PENDING').length)
+const resolvedCount = computed(() => rows.value.filter((row) => row.status === 'RESOLVED').length)
+const ignoredCount = computed(() => rows.value.filter((row) => row.status === 'IGNORED').length)
 async function load() { loading.value = true; try { rows.value = await http.get('/unresolved', { params: { status: status.value || undefined } }); page.value = 1 } finally { loading.value = false } }
 async function resolve(row: any) { await http.put(`/unresolved/${row.id}/resolve`, { resolveNote: '已补充或关联知识文档' }); await load() }
 async function ignore(row: any) { await http.put(`/unresolved/${row.id}/ignore`); await load() }
