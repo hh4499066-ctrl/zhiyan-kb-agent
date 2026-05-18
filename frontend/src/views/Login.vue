@@ -134,11 +134,11 @@ async function submit() {
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 680px) 420px;
+  grid-template-columns: minmax(0, 620px) 420px;
   align-items: center;
   justify-content: center;
-  gap: 72px;
-  padding: 72px 40px;
+  gap: 64px;
+  padding: 48px 40px;
   overflow: hidden;
   background: #071426;
 }
@@ -172,7 +172,7 @@ async function submit() {
 
 .login-hero {
   display: grid;
-  gap: 34px;
+  gap: 24px;
   color: #fff;
 }
 
@@ -180,7 +180,7 @@ async function submit() {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 34px;
+  margin-bottom: 24px;
 }
 
 .brand-mark {
@@ -212,10 +212,10 @@ async function submit() {
 }
 
 .hero-copy h1 {
-  max-width: 640px;
+  max-width: 600px;
   margin: 0;
   color: transparent;
-  font-size: clamp(40px, 5vw, 64px);
+  font-size: clamp(40px, 5vw, 58px);
   font-weight: 850;
   line-height: 1.05;
   background: linear-gradient(112deg, #ffffff 0%, #dffdf8 36%, #48d6c8 64%, #7aa7ff 100%);
@@ -225,16 +225,16 @@ async function submit() {
 }
 
 .hero-copy p {
-  max-width: 560px;
-  margin: 22px 0 0;
+  max-width: 540px;
+  margin: 18px 0 0;
   color: #b8c3d1;
-  font-size: 17px;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .hero-dashboard {
-  width: min(100%, 560px);
-  padding: 24px;
+  width: min(100%, 520px);
+  padding: 18px;
   border: 1px solid #1d3c52;
   border-radius: 8px;
   background: #0d2235;
@@ -244,7 +244,7 @@ async function submit() {
 .knowledge-panel {
   position: relative;
   overflow: hidden;
-  padding: 22px;
+  padding: 18px;
   border: 1px solid rgba(20, 215, 195, 0.28);
   border-radius: 8px;
   background:
@@ -281,13 +281,13 @@ async function submit() {
 
 .panel-head b {
   color: #12bfae;
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .knowledge-map {
   position: relative;
-  height: 190px;
-  margin-top: 14px;
+  height: 160px;
+  margin-top: 10px;
 }
 
 .knowledge-map svg {
@@ -321,49 +321,49 @@ async function submit() {
 }
 
 .node-primary {
-  left: 38px;
-  top: 74px;
-  width: 68px;
-  height: 52px;
+  left: 34px;
+  top: 62px;
+  width: 64px;
+  height: 48px;
   background: linear-gradient(135deg, #12bfae, #2563eb);
   color: #fff;
   font-size: 18px;
 }
 
 .node-docs {
-  left: 146px;
-  top: 18px;
-  width: 74px;
-  height: 38px;
+  left: 136px;
+  top: 14px;
+  width: 70px;
+  height: 36px;
 }
 
 .node-faq {
-  left: 156px;
-  bottom: 20px;
-  width: 66px;
-  height: 38px;
+  left: 146px;
+  bottom: 16px;
+  width: 62px;
+  height: 36px;
 }
 
 .node-memory {
-  left: 258px;
-  bottom: 22px;
-  width: 96px;
-  height: 38px;
+  left: 238px;
+  bottom: 18px;
+  width: 88px;
+  height: 36px;
 }
 
 .node-search {
-  right: 20px;
-  top: 82px;
-  width: 70px;
-  height: 44px;
+  right: 18px;
+  top: 68px;
+  width: 66px;
+  height: 40px;
 }
 
 .query-card {
   position: absolute;
-  left: 246px;
-  top: 18px;
-  min-width: 128px;
-  padding: 12px 14px;
+  left: 226px;
+  top: 14px;
+  min-width: 122px;
+  padding: 10px 12px;
   border: 1px solid rgba(59, 130, 246, 0.42);
   border-radius: 8px;
   background: rgba(8, 24, 44, 0.9);
@@ -385,12 +385,12 @@ async function submit() {
 }
 
 .insight-grid {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .insight-grid div {
   flex: 1;
-  padding: 22px;
+  padding: 16px 18px;
   border: 1px solid #214a5e;
   border-radius: 8px;
   background: #102c40;
@@ -398,9 +398,9 @@ async function submit() {
 
 .insight-grid strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 6px;
   color: #12bfae;
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .login-card {

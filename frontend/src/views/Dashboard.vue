@@ -1,6 +1,6 @@
 <template>
-  <div class="page dashboard-page">
-    <div class="page-header">
+  <div ref="dashboardRoot" class="page dashboard-page">
+    <div class="page-header" data-motion="page-item">
       <div>
         <h2 class="page-title">知识运营驾驶舱</h2>
         <p class="page-subtitle">把空间、文档、问答和沉淀问题集中到一张可行动视图。</p>
@@ -103,14 +103,17 @@ import * as echarts from 'echarts'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { http } from '../api'
+import { useAnimeMotion } from '../composables/useAnimeMotion'
 
 const overview = ref<any>({})
 const aiConfig = ref<any>()
 const aiDialogVisible = ref(false)
+const dashboardRoot = ref<HTMLElement>()
 const qaChart = ref<HTMLDivElement>()
 const deptChart = ref<HTMLDivElement>()
 let qaInstance: echarts.ECharts | undefined
 let deptInstance: echarts.ECharts | undefined
+const motion = useAnimeMotion()
 
 const loading = ref(false)
 const allStats = computed(() => [
@@ -141,6 +144,7 @@ async function loadData() {
     aiConfig.value = await http.get('/ai-config').catch(() => null)
     await nextTick()
     renderCharts()
+    motion.enterDashboard(dashboardRoot)
   } finally {
     loading.value = false
   }
@@ -191,7 +195,10 @@ function renderCharts() {
   })
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await motion.enterPage(dashboardRoot)
+  await loadData()
+})
 onBeforeUnmount(() => {
   qaInstance?.dispose()
   deptInstance?.dispose()

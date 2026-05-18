@@ -6,6 +6,7 @@ import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
 import com.zhiyan.kb.rag.VectorStoreService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -28,6 +29,7 @@ public class ChunkService {
         this(chunkMapper, embeddingClient, vectorStoreService, null);
     }
 
+    @Autowired
     public ChunkService(KbDocumentChunkMapper chunkMapper, EmbeddingClient embeddingClient,
                         VectorStoreService vectorStoreService, TransactionTemplate transactionTemplate) {
         this.chunkMapper = chunkMapper;

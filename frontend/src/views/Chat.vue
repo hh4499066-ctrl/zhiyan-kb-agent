@@ -1,9 +1,9 @@
 <template>
-  <div :class="['page chat-page', isChatSidebarCollapse ? 'chat-sidebar-collapsed' : '']">
-    <aside class="panel sessions">
+  <div ref="chatRoot" :class="['page chat-page', isChatSidebarCollapse ? 'chat-sidebar-collapsed' : '']">
+    <aside class="panel sessions" data-motion="page-item">
       <div class="sessions-head">
         <h3>会话</h3>
-        <el-button type="primary" @click="newSession">
+        <el-button type="primary" @mousedown="press" @click="newSession">
           <el-icon><Plus /></el-icon>
           新建对话
         </el-button>
@@ -24,14 +24,14 @@
       </div>
     </aside>
 
-    <button class="chat-sidebar-toggle" type="button" @click="isChatSidebarCollapse = !isChatSidebarCollapse">
+    <button class="chat-sidebar-toggle" type="button" @mousedown="press" @click="isChatSidebarCollapse = !isChatSidebarCollapse">
       <el-icon>
         <ArrowRight v-if="isChatSidebarCollapse" />
         <ArrowLeft v-else />
       </el-icon>
     </button>
 
-    <section :class="['chat-main panel', messages.length ? 'has-messages' : 'empty-state']">
+    <section :class="['chat-main panel', messages.length ? 'has-messages' : 'empty-state']" data-motion="page-item">
       <div class="chat-topline">
         <div>
           <h2>智研 AI</h2>
@@ -43,7 +43,7 @@
         </div>
       </div>
 
-      <div class="messages">
+      <div ref="messagesRoot" class="messages">
         <div v-if="!messages.length" class="empty-chat">
           <span class="empty-kicker">智研 AI</span>
           <strong>今天想了解什么？</strong>
@@ -86,7 +86,7 @@
           <div class="composer-toolbar">
             <div class="composer-actions">
               <div :class="['model-picker', messages.length ? 'open-up' : 'open-down']">
-                <button class="composer-speed" type="button" @click="isModelMenuOpen = !isModelMenuOpen">
+                <button class="composer-speed" type="button" @mousedown="press" @click="isModelMenuOpen = !isModelMenuOpen">
                   <span>{{ selectedModelLabel }}</span>
                   <el-icon><ArrowDown /></el-icon>
                 </button>
@@ -97,6 +97,7 @@
                     :key="option.value"
                     :class="['model-menu-item', selectedModel === option.value ? 'active' : '']"
                     type="button"
+                    @mousedown="press"
                     @click="selectChatModel(option.value)"
                   >
                     <span>
@@ -107,7 +108,7 @@
                   </button>
                 </div>
               </div>
-              <button class="composer-send" type="button" :disabled="loading || !question.trim()" @click="ask" aria-label="发送">
+              <button class="composer-send" type="button" :disabled="loading || !question.trim()" @mousedown="press" @click="ask" aria-label="发送">
                 <el-icon><Promotion /></el-icon>
               </button>
             </div>
@@ -119,14 +120,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowLeft, ArrowRight, Check, Plus, Promotion } from '@element-plus/icons-vue'
 import { http } from '../api'
 import deepseekLogo from '../assets/deepseek-logo-icon.svg'
+import { useAnimeMotion } from '../composables/useAnimeMotion'
 
 const route = useRoute()
+const chatRoot = ref<HTMLElement>()
+const messagesRoot = ref<HTMLElement>()
 const spaces = ref<any[]>([])
 const sessions = ref<any[]>([])
 const spaceId = ref<number>(0)
@@ -137,6 +141,7 @@ const messages = ref<any[]>([])
 const viewingHistory = ref(false)
 const isChatSidebarCollapse = ref(false)
 const isModelMenuOpen = ref(false)
+const motion = useAnimeMotion()
 const selectedModel = ref('deepseek-v4-flash')
 const modelOptions = [
   { label: '快速', value: 'deepseek-v4-flash', description: '低延迟回答' },
@@ -216,6 +221,10 @@ function handleQuestionKeydown(event: KeyboardEvent) {
   ask()
 }
 
+function press(event: MouseEvent) {
+  motion.pulse(event.currentTarget as HTMLElement)
+}
+
 function renderAssistantMessage(content: string) {
   return escapeHtml(content || '')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -240,7 +249,17 @@ function safeRefs(json: string) {
   }
 }
 
+watch(() => messages.value.length, async () => {
+  await motion.revealLatest(chatRoot, '.chat-bubble')
+  messagesRoot.value?.scrollTo({ top: messagesRoot.value.scrollHeight, behavior: 'smooth' })
+})
+
+watch(isModelMenuOpen, (open) => {
+  if (open) motion.openFloating(chatRoot, '.model-menu')
+})
+
 onMounted(async () => {
+  await motion.enterPage(chatRoot)
   const spaceData = await http.get('/spaces', { params: { page: 1, size: 100 } })
   spaces.value = spaceData.records || spaceData
   const querySpaceId = Number(route.query.spaceId)

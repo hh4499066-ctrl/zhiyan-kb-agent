@@ -1,10 +1,11 @@
 <template>
+  <div ref="layoutRoot" class="shell-host">
   <el-container class="shell">
     <el-aside
       :class="['aside', isMainNavCollapse ? 'aside-collapsed' : '']"
       :width="isMainNavCollapse ? '76px' : '252px'"
     >
-      <div class="logo">
+      <div class="logo" data-motion="page-item">
         <div class="logo-mark">Z</div>
         <div class="logo-copy">
           <strong>智研知识库</strong>
@@ -23,6 +24,7 @@
           :key="item.path"
           :index="item.path"
           class="nav-item"
+          data-motion="page-item"
           :style="{ '--nav-accent': item.accent }"
         >
           <el-icon><component :is="item.icon" /></el-icon>
@@ -44,7 +46,7 @@
     </el-aside>
 
     <el-container class="content-shell">
-      <el-header class="header">
+      <el-header class="header" data-motion="page-item">
         <div>
           <h1>{{ $route.meta.title }}</h1>
           <p>欢迎回来，这是您的企业知识平台概览。</p>
@@ -79,10 +81,11 @@
       </el-main>
     </el-container>
   </el-container>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   ArrowDown,
   Box,
@@ -101,8 +104,11 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../store'
+import { useAnimeMotion } from '../composables/useAnimeMotion'
 
 const auth = useAuthStore()
+const layoutRoot = ref<HTMLElement>()
+const motion = useAnimeMotion()
 const isMainNavCollapse = ref(false)
 const allMenus = [
   { path: '/dashboard', title: '仪表盘', icon: DataBoard, accent: '#12bfae' },
@@ -127,9 +133,22 @@ const roleName = computed(() => ({
   newcomer: '新人'
 }[auth.user?.role || 'employee']))
 const avatarText = computed(() => (auth.user?.realName || auth.user?.username || 'U').slice(0, 1).toUpperCase())
+
+onMounted(() => {
+  motion.enterPage(layoutRoot)
+})
+
+watch(isMainNavCollapse, async () => {
+  await nextTick()
+  motion.pulse(layoutRoot.value?.querySelector<HTMLElement>('.logo-mark') || undefined)
+})
 </script>
 
 <style scoped>
+.shell-host {
+  min-height: 100vh;
+}
+
 .shell {
   min-height: 100vh;
   background: #f6f8fb;
