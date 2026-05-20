@@ -35,6 +35,7 @@ public class ChatServiceImpl implements ChatService {
     private static final double PRIMARY_MIN_SCORE = 0.18;
     private static final double FALLBACK_TRIGGER_SCORE = 0.35;
     private static final double FALLBACK_MIN_SCORE = 0.25;
+    private static final double KNOWLEDGE_ANSWER_MIN_SCORE = 0.35;
     private static final int DEFAULT_TOP_K = 5;
     private static final int MAX_TOP_K = 20;
     private static final int MAX_QUESTION_LENGTH = 2000;
@@ -95,6 +96,7 @@ public class ChatServiceImpl implements ChatService {
                 retrievalResults = fallbackResults;
             }
         }
+        retrievalResults = filterAnswerableKnowledge(retrievalResults);
         if (!retrievalResults.isEmpty()) {
             effectiveSpaceId = retrievalResults.get(0).getSpaceId();
         }
@@ -125,6 +127,13 @@ public class ChatServiceImpl implements ChatService {
 
     private boolean shouldFallback(List<RetrievalResult> results) {
         return results.isEmpty() || results.get(0).getFinalScore() < FALLBACK_TRIGGER_SCORE;
+    }
+
+    private List<RetrievalResult> filterAnswerableKnowledge(List<RetrievalResult> results) {
+        if (results.isEmpty() || results.get(0).getFinalScore() < KNOWLEDGE_ANSWER_MIN_SCORE) {
+            return List.of();
+        }
+        return results;
     }
 
     private List<RetrievalResult> searchAllSpaces(Long currentSpaceId, String question, int topK) {

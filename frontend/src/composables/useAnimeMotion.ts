@@ -14,14 +14,36 @@ function query(root: HTMLElement | undefined, selector: string) {
   return Array.from(root.querySelectorAll<HTMLElement>(selector))
 }
 
+function restoreVisible(targets: Parameters<typeof animate>[0]) {
+  const elements = Array.isArray(targets)
+    ? targets
+    : targets instanceof Element
+      ? [targets]
+      : []
+  elements.forEach((element) => {
+    if (element instanceof HTMLElement) {
+      element.style.opacity = '1'
+      element.style.transform = ''
+    }
+  })
+}
+
 export function useAnimeMotion() {
   const activeAnimations: JSAnimation[] = []
 
   function run(targets: Parameters<typeof animate>[0], params: AnimationParams) {
-    if (shouldReduceMotion()) return undefined
-    const animation = animate(targets, params)
-    activeAnimations.push(animation)
-    return animation
+    if (shouldReduceMotion()) {
+      restoreVisible(targets)
+      return undefined
+    }
+    try {
+      const animation = animate(targets, params)
+      activeAnimations.push(animation)
+      return animation
+    } catch {
+      restoreVisible(targets)
+      return undefined
+    }
   }
 
   async function enterPage(root: ElementRoot) {
@@ -29,8 +51,8 @@ export function useAnimeMotion() {
     const items = query(root.value, '[data-motion="page-item"]')
     if (!items.length) return
     run(items, {
-      opacity: { from: 0 },
-      y: { from: 14 },
+      opacity: { from: 0, to: 1 },
+      y: { from: 14, to: 0 },
       duration: 460,
       delay: stagger(58),
       ease: 'outCubic'
@@ -43,9 +65,9 @@ export function useAnimeMotion() {
     const panels = query(root.value, '.panel')
     if (metrics.length) {
       run(metrics, {
-        opacity: { from: 0 },
-        y: { from: 18 },
-        scale: { from: 0.98 },
+        opacity: { from: 0, to: 1 },
+        y: { from: 18, to: 0 },
+        scale: { from: 0.98, to: 1 },
         duration: 520,
         delay: stagger(72),
         ease: 'outCubic'
@@ -53,8 +75,8 @@ export function useAnimeMotion() {
     }
     if (panels.length) {
       run(panels, {
-        opacity: { from: 0 },
-        y: { from: 16 },
+        opacity: { from: 0, to: 1 },
+        y: { from: 16, to: 0 },
         duration: 560,
         delay: stagger(82, { start: 120 }),
         ease: 'outCubic'
@@ -76,9 +98,9 @@ export function useAnimeMotion() {
     const latest = items[items.length - 1]
     if (!latest) return
     run(latest, {
-      opacity: { from: 0 },
-      y: { from: 10 },
-      scale: { from: 0.985 },
+      opacity: { from: 0, to: 1 },
+      y: { from: 10, to: 0 },
+      scale: { from: 0.985, to: 1 },
       duration: 300,
       ease: 'outCubic'
     })
@@ -89,9 +111,9 @@ export function useAnimeMotion() {
     const target = query(root.value, selector)[0]
     if (!target) return
     run(target, {
-      opacity: { from: 0 },
-      y: { from: 8 },
-      scale: { from: 0.98 },
+      opacity: { from: 0, to: 1 },
+      y: { from: 8, to: 0 },
+      scale: { from: 0.98, to: 1 },
       duration: 220,
       ease: 'outCubic'
     })
