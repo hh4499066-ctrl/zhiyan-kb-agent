@@ -21,7 +21,6 @@ import java.util.Map;
 @Slf4j
 @Component
 public class DeepSeekLLMClient implements LLMClient {
-    private static final List<String> CHAT_MODEL_ALLOWLIST = List.of("deepseek-v4-flash", "deepseek-v4-pro");
     private final AiProperties properties;
     private final RestClient restClient;
 
@@ -145,7 +144,7 @@ public class DeepSeekLLMClient implements LLMClient {
         if (requested.isBlank()) {
             requested = properties.cleanChatModel();
         }
-        if (!CHAT_MODEL_ALLOWLIST.contains(requested)) {
+        if (!properties.getChatModelAllowlist().contains(requested)) {
             throw new BusinessException(400, "Unsupported chat model");
         }
         return requested;

@@ -7,6 +7,7 @@ import com.zhiyan.kb.ai.AIResponseParser;
 import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.ai.PromptBuilder;
 import com.zhiyan.kb.common.BusinessException;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.dto.ChatAskRequest;
 import com.zhiyan.kb.dto.ChatMemoryMessage;
@@ -36,6 +37,8 @@ public class ChatServiceImpl implements ChatService {
     private static final double FALLBACK_TRIGGER_SCORE = 0.35;
     private static final double FALLBACK_MIN_SCORE = 0.25;
     private static final double KNOWLEDGE_ANSWER_MIN_SCORE = 0.35;
+    private static final double CONFIDENCE_SCORE_OFFSET = 0.35;
+    private static final double CONFIDENCE_SCORE_CEILING = 0.95;
     private static final int DEFAULT_TOP_K = 5;
     private static final int MAX_TOP_K = 20;
     private static final int MAX_QUESTION_LENGTH = 2000;
@@ -103,7 +106,8 @@ public class ChatServiceImpl implements ChatService {
         boolean unresolved = retrievalResults.isEmpty();
         String prompt = promptBuilder.buildChatPrompt(request.getQuestion(), rewritten, longMemories, retrievalResults);
         String answer = responseParser.compact(llmClient.complete(prompt, context, request.getModel()));
-        double confidence = unresolved ? 0.25 : Math.min(0.95, retrievalResults.get(0).getFinalScore() + 0.35);
+        double confidence = unresolved ? 0.25 : Math.min(CONFIDENCE_SCORE_CEILING,
+                retrievalResults.get(0).getFinalScore() + CONFIDENCE_SCORE_OFFSET);
         List<ChatReferenceVO> references = retrievalResults.stream()
                 .map(r -> new ChatReferenceVO(r.getDocumentId(), r.getDocumentTitle(), r.getChunkId(), r.getContent(), r.getFinalScore()))
                 .toList();
@@ -143,11 +147,12 @@ public class ChatServiceImpl implements ChatService {
         }
         return spaceMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbSpace>()
                         .in(KbSpace::getId, accessibleSpaceIds)
-                        .eq(KbSpace::getStatus, "NORMAL")
+                        .eq(KbSpace::getStatus, StatusConstants.NORMAL)
                         .orderByDesc(KbSpace::getUpdateTime))
                 .stream()
                 .filter(space -> currentSpaceId == null || !space.getId().equals(currentSpaceId))
                 .limit(MAX_ALL_SPACE_CANDIDATES)
+                .parallel()
                 .flatMap(space -> retrievalService.search(space.getId(), question, topK, 0.5, FALLBACK_MIN_SCORE).stream())
                 .sorted(Comparator.comparingDouble(RetrievalResult::getFinalScore).reversed())
                 .limit(Math.max(1, topK))
@@ -182,12 +187,15 @@ public class ChatServiceImpl implements ChatService {
         }
         List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
         if (accessibleSpaceIds.isEmpty()) {
-            return 0L;
+            throw new BusinessException(403, "No accessible knowledge space");
         }
         KbSpace first = spaceMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbSpace>()
                 .in(KbSpace::getId, accessibleSpaceIds)
-                .eq(KbSpace::getStatus, "NORMAL")).stream().findFirst().orElse(null);
-        return first == null ? 0L : first.getId();
+                .eq(KbSpace::getStatus, StatusConstants.NORMAL)).stream().findFirst().orElse(null);
+        if (first == null) {
+            throw new BusinessException(403, "No accessible knowledge space");
+        }
+        return first.getId();
     }
 
     private ChatRecord persistChatRecord(Long userId, Long recordSpaceId, String sessionId, String question,
@@ -214,7 +222,7 @@ public class ChatServiceImpl implements ChatService {
                 unresolvedQuestion.setQuestion(question);
                 unresolvedQuestion.setRewrittenQuestion(rewritten);
                 unresolvedQuestion.setReason("RAG 检索结果为空或低于阈值");
-                unresolvedQuestion.setStatus("PENDING");
+                unresolvedQuestion.setStatus(StatusConstants.PENDING);
                 unresolvedQuestionMapper.insert(unresolvedQuestion);
             }
             incrementQaCount(recordSpaceId);

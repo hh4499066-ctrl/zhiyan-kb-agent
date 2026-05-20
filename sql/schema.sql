@@ -38,13 +38,14 @@ CREATE TABLE sys_user (
   email VARCHAR(120),
   phone VARCHAR(30),
   role VARCHAR(30) NOT NULL,
-  department_id BIGINT,
+  department_id BIGINT NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_role (role),
   INDEX idx_department (department_id),
-  INDEX idx_status (status)
+  INDEX idx_status (status),
+  CONSTRAINT fk_user_department FOREIGN KEY (department_id) REFERENCES sys_department(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE kb_space (
@@ -52,7 +53,7 @@ CREATE TABLE kb_space (
   name VARCHAR(100) NOT NULL,
   code VARCHAR(80) NOT NULL UNIQUE,
   description VARCHAR(500),
-  owner_id BIGINT,
+  owner_id BIGINT NOT NULL,
   visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC',
   department_id BIGINT,
   status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
@@ -62,7 +63,9 @@ CREATE TABLE kb_space (
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_owner (owner_id),
   INDEX idx_department (department_id),
-  INDEX idx_status (status)
+  INDEX idx_status (status),
+  CONSTRAINT fk_space_owner FOREIGN KEY (owner_id) REFERENCES sys_user(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_space_department FOREIGN KEY (department_id) REFERENCES sys_department(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE kb_space_member (
@@ -74,27 +77,32 @@ CREATE TABLE kb_space_member (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_space_user (space_id, user_id),
-  INDEX idx_user (user_id)
+  INDEX idx_user (user_id),
+  CONSTRAINT fk_space_member_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE CASCADE,
+  CONSTRAINT fk_space_member_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE kb_document (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   space_id BIGINT NOT NULL,
   title VARCHAR(200) NOT NULL,
-  original_filename VARCHAR(255),
-  file_type VARCHAR(20),
-  file_size BIGINT DEFAULT 0,
-  file_url VARCHAR(500),
+  original_filename VARCHAR(255) NOT NULL,
+  file_type VARCHAR(20) NOT NULL,
+  file_size BIGINT NOT NULL DEFAULT 0,
+  file_url VARCHAR(500) NOT NULL,
   content_text MEDIUMTEXT,
-  summary MEDIUMTEXT,
+  summary TEXT,
   keywords VARCHAR(500),
   parse_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
   vector_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
   status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
-  uploader_id BIGINT,
+  uploader_id BIGINT NOT NULL,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_space_status (space_id, status),
+  INDEX idx_uploader (uploader_id),
+  CONSTRAINT fk_document_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_document_uploader FOREIGN KEY (uploader_id) REFERENCES sys_user(id) ON DELETE RESTRICT,
   FULLTEXT KEY ft_content (title, content_text)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -111,7 +119,10 @@ CREATE TABLE kb_document_chunk (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_document (document_id),
+  UNIQUE KEY uk_document_chunk_index (document_id, chunk_index),
   INDEX idx_space_status (space_id, status),
+  CONSTRAINT fk_chunk_document FOREIGN KEY (document_id) REFERENCES kb_document(id) ON DELETE CASCADE,
+  CONSTRAINT fk_chunk_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE RESTRICT,
   FULLTEXT KEY ft_chunk (content)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -128,7 +139,8 @@ CREATE TABLE document_processing_task (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_status_retry (status, retry_count),
-  INDEX idx_document (document_id)
+  INDEX idx_document (document_id),
+  CONSTRAINT fk_processing_task_document FOREIGN KEY (document_id) REFERENCES kb_document(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE kb_faq (
@@ -142,18 +154,24 @@ CREATE TABLE kb_faq (
   status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_space_status (space_id, status)
+  INDEX idx_space_status (space_id, status),
+  INDEX idx_document (document_id),
+  UNIQUE KEY uk_faq_document_question (document_id, question),
+  CONSTRAINT fk_faq_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_faq_document FOREIGN KEY (document_id) REFERENCES kb_document(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE chat_session (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  id VARCHAR(80) PRIMARY KEY,
   user_id BIGINT NOT NULL,
   space_id BIGINT,
   title VARCHAR(120) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_user_status (user_id, status)
+  INDEX idx_user_status (user_id, status),
+  CONSTRAINT fk_chat_session_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_chat_session_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE chat_record (
@@ -172,7 +190,11 @@ CREATE TABLE chat_record (
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_user_time (user_id, create_time),
   INDEX idx_space_time (space_id, create_time),
-  INDEX idx_session (session_id)
+  INDEX idx_session (session_id),
+  INDEX idx_unresolved (unresolved),
+  UNIQUE KEY uk_chat_user_session_question (user_id, session_id, question(191)),
+  CONSTRAINT fk_chat_record_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_chat_record_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE chat_feedback (
@@ -184,7 +206,10 @@ CREATE TABLE chat_feedback (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_record (record_id),
-  INDEX idx_user (user_id)
+  INDEX idx_user (user_id),
+  UNIQUE KEY uk_feedback_record_user (record_id, user_id),
+  CONSTRAINT fk_chat_feedback_record FOREIGN KEY (record_id) REFERENCES chat_record(id) ON DELETE CASCADE,
+  CONSTRAINT fk_chat_feedback_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE user_long_term_memory (
@@ -197,7 +222,9 @@ CREATE TABLE user_long_term_memory (
   status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_user_status (user_id, status)
+  INDEX idx_user_status (user_id, status),
+  UNIQUE KEY uk_memory_user_type_content (user_id, memory_type, content(191)),
+  CONSTRAINT fk_memory_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE unresolved_question (
@@ -214,7 +241,13 @@ CREATE TABLE unresolved_question (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_space_status (space_id, status),
-  INDEX idx_user (user_id)
+  INDEX idx_user (user_id),
+  INDEX idx_resolver (resolver_id),
+  UNIQUE KEY uk_unresolved_user_space_question (user_id, space_id, question(191)),
+  CONSTRAINT fk_unresolved_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_unresolved_space FOREIGN KEY (space_id) REFERENCES kb_space(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_unresolved_resolver FOREIGN KEY (resolver_id) REFERENCES sys_user(id) ON DELETE SET NULL,
+  CONSTRAINT fk_unresolved_document FOREIGN KEY (related_document_id) REFERENCES kb_document(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE onboarding_plan (
@@ -227,7 +260,9 @@ CREATE TABLE onboarding_plan (
   recommended_documents TEXT,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_user (user_id)
+  INDEX idx_user (user_id),
+  UNIQUE KEY uk_onboarding_user_title (user_id, title),
+  CONSTRAINT fk_onboarding_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE operation_log (
@@ -239,5 +274,6 @@ CREATE TABLE operation_log (
   ip VARCHAR(60),
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_user_time (user_id, create_time)
+  INDEX idx_user_time (user_id, create_time),
+  CONSTRAINT fk_operation_log_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

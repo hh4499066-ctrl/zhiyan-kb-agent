@@ -27,6 +27,8 @@ public class OperationLogController {
     public Result<PageResult<OperationLog>> list(@RequestParam(defaultValue = "1") long page,
                                                  @RequestParam(defaultValue = "30") long size,
                                                  @RequestParam(required = false) String moduleName) {
+        page = Math.max(1, page);
+        size = Math.min(100, Math.max(1, size));
         Page<OperationLog> result = operationLogMapper.selectPage(Page.of(page, size), new LambdaQueryWrapper<OperationLog>()
                 .eq(moduleName != null && !moduleName.isBlank(), OperationLog::getModuleName, moduleName)
                 .orderByDesc(OperationLog::getCreateTime));

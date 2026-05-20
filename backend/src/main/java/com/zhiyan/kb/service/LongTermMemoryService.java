@@ -1,6 +1,7 @@
 package com.zhiyan.kb.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.entity.UserLongTermMemory;
 import com.zhiyan.kb.mapper.UserLongTermMemoryMapper;
 import com.zhiyan.kb.rag.KeywordSearchService;
@@ -23,12 +24,17 @@ public class LongTermMemoryService {
     public List<UserLongTermMemory> list(Long userId) {
         return memoryMapper.selectList(new LambdaQueryWrapper<UserLongTermMemory>()
                 .eq(UserLongTermMemory::getUserId, userId)
-                .eq(UserLongTermMemory::getStatus, "NORMAL")
+                .eq(UserLongTermMemory::getStatus, StatusConstants.NORMAL)
                 .orderByDesc(UserLongTermMemory::getCreateTime));
     }
 
     public List<String> recall(Long userId, String question, int topK) {
-        return list(userId).stream()
+        return memoryMapper.selectList(new LambdaQueryWrapper<UserLongTermMemory>()
+                        .eq(UserLongTermMemory::getUserId, userId)
+                        .eq(UserLongTermMemory::getStatus, StatusConstants.NORMAL)
+                        .orderByDesc(UserLongTermMemory::getUpdateTime)
+                        .last("LIMIT 200"))
+                .stream()
                 .map(memory -> new ScoredMemory(memory, score(question, memory)))
                 .filter(scored -> scored.score() > 0)
                 .sorted(Comparator.comparingDouble(ScoredMemory::score).reversed())

@@ -2,6 +2,7 @@ package com.zhiyan.kb.rag;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhiyan.kb.ai.EmbeddingClient;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
@@ -30,14 +31,14 @@ public class MockVectorStoreService implements VectorStoreService {
 
     @PostConstruct
     public void rebuild() {
-        List<KbDocumentChunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getStatus, "NORMAL"));
+        List<KbDocumentChunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>().eq(KbDocumentChunk::getStatus, StatusConstants.NORMAL));
         if (chunks.isEmpty()) {
             return;
         }
         List<Long> documentIds = chunks.stream().map(KbDocumentChunk::getDocumentId).distinct().toList();
         Map<Long, KbDocument> documents = documentMapper.selectList(new LambdaQueryWrapper<KbDocument>()
                         .in(KbDocument::getId, documentIds)
-                        .eq(KbDocument::getStatus, "NORMAL"))
+                        .eq(KbDocument::getStatus, StatusConstants.NORMAL))
                 .stream()
                 .collect(Collectors.toMap(KbDocument::getId, Function.identity()));
         for (KbDocumentChunk chunk : chunks) {

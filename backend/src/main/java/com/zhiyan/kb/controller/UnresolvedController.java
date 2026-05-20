@@ -4,10 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.common.UserContext;
+import com.zhiyan.kb.dto.ResolveUnresolvedRequest;
 import com.zhiyan.kb.entity.UnresolvedQuestion;
 import com.zhiyan.kb.mapper.UnresolvedQuestionMapper;
 import com.zhiyan.kb.service.ResourceAccessService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -17,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/unresolved")
@@ -33,30 +35,33 @@ public class UnresolvedController {
     @GetMapping
     public Result<List<UnresolvedQuestion>> list(@RequestParam(required = false) String status,
                                                  @RequestParam(required = false) Long spaceId) {
-        List<UnresolvedQuestion> questions = mapper.selectList(new LambdaQueryWrapper<UnresolvedQuestion>()
+        LambdaQueryWrapper<UnresolvedQuestion> query = new LambdaQueryWrapper<UnresolvedQuestion>()
                 .eq(status != null && !status.isBlank(), UnresolvedQuestion::getStatus, status)
                 .eq(spaceId != null, UnresolvedQuestion::getSpaceId, spaceId)
-                .orderByDesc(UnresolvedQuestion::getCreateTime));
+                .orderByDesc(UnresolvedQuestion::getCreateTime);
         if (accessService.isAdmin() || accessService.isKbManager()) {
-            return Result.ok(questions.stream().filter(q -> accessService.canAccessSpace(q.getSpaceId())).toList());
+            List<Long> accessibleSpaceIds = accessService.accessibleNormalSpaceIds();
+            if (accessibleSpaceIds.isEmpty()) {
+                return Result.ok(List.of());
+            }
+            query.in(UnresolvedQuestion::getSpaceId, accessibleSpaceIds);
+        } else {
+            query.eq(UnresolvedQuestion::getUserId, UserContext.userId());
         }
-        return Result.ok(questions.stream()
-                .filter(q -> UserContext.userId().equals(q.getUserId()))
-                .toList());
+        return Result.ok(mapper.selectList(query));
     }
 
     @PutMapping("/{id}/resolve")
     @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
-    public Result<Void> resolve(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public Result<Void> resolve(@PathVariable Long id, @Valid @RequestBody ResolveUnresolvedRequest request) {
         accessService.requireUnresolvedQuestionManage(id);
         UnresolvedQuestion question = new UnresolvedQuestion();
         question.setId(id);
-        question.setStatus("RESOLVED");
+        question.setStatus(StatusConstants.RESOLVED);
         question.setResolverId(UserContext.userId());
-        question.setResolveNote(String.valueOf(body.getOrDefault("resolveNote", "Resolved")));
-        if (body.get("relatedDocumentId") != null) {
-            question.setRelatedDocumentId(Long.valueOf(String.valueOf(body.get("relatedDocumentId"))));
-        }
+        question.setResolveNote(request.getResolveNote() == null || request.getResolveNote().isBlank()
+                ? "Resolved" : request.getResolveNote());
+        question.setRelatedDocumentId(request.getRelatedDocumentId());
         mapper.updateById(question);
         return Result.ok();
     }
@@ -67,7 +72,7 @@ public class UnresolvedController {
         accessService.requireUnresolvedQuestionManage(id);
         UnresolvedQuestion question = new UnresolvedQuestion();
         question.setId(id);
-        question.setStatus("IGNORED");
+        question.setStatus(StatusConstants.IGNORED);
         mapper.updateById(question);
         return Result.ok();
     }

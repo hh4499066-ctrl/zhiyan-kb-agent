@@ -2,6 +2,7 @@ package com.zhiyan.kb.service;
 
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.zhiyan.kb.ai.EmbeddingClient;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
 import com.zhiyan.kb.mapper.KbDocumentChunkMapper;
@@ -40,9 +41,7 @@ public class ChunkService {
 
     public List<KbDocumentChunk> rebuildChunks(KbDocument document) {
         List<KbDocumentChunk> chunks = persistChunks(document);
-        for (KbDocumentChunk chunk : chunks) {
-            vectorStoreService.upsert(chunk, embeddingClient.embed(chunk.getContent()), document.getTitle());
-        }
+        upsertVectorsWithCompensation(document, chunks);
         return chunks;
     }
 
@@ -63,20 +62,46 @@ public class ChunkService {
             chunk.setSpaceId(document.getSpaceId());
             chunk.setChunkIndex(i);
             chunk.setContent(parts.get(i));
-            chunk.setTokenCount(parts.get(i).length());
+            chunk.setTokenCount(estimateTokens(parts.get(i)));
             chunk.setEmbeddingText(parts.get(i));
-            chunk.setVectorId("mock-vector-" + document.getId() + "-" + i);
-            chunk.setStatus("NORMAL");
+            chunk.setStatus(StatusConstants.NORMAL);
             chunkMapper.insert(chunk);
+            chunk.setVectorId("chunk-" + chunk.getId());
+            KbDocumentChunk update = new KbDocumentChunk();
+            update.setId(chunk.getId());
+            update.setVectorId(chunk.getVectorId());
+            chunkMapper.updateById(update);
             chunks.add(chunk);
         }
         return chunks;
     }
 
+    private void upsertVectorsWithCompensation(KbDocument document, List<KbDocumentChunk> chunks) {
+        try {
+            for (KbDocumentChunk chunk : chunks) {
+                vectorStoreService.upsert(chunk, embeddingClient.embed(chunk.getContent()), document.getTitle());
+            }
+        } catch (RuntimeException ex) {
+            disableDocumentChunks(document.getId());
+            throw ex;
+        }
+    }
+
+    private int estimateTokens(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
+        int asciiWords = text.replaceAll("[^\\p{Alnum}]+", " ").trim().isBlank()
+                ? 0
+                : text.replaceAll("[^\\p{Alnum}]+", " ").trim().split("\\s+").length;
+        int nonAsciiChars = (int) text.chars().filter(ch -> ch > 127 && !Character.isWhitespace(ch)).count();
+        return Math.max(1, asciiWords + (int) Math.ceil(nonAsciiChars / 1.6d));
+    }
+
     public void disableDocumentChunks(Long documentId) {
         chunkMapper.update(null, new UpdateWrapper<KbDocumentChunk>()
                 .eq("document_id", documentId)
-                .set("status", "DISABLED"));
+                .set("status", StatusConstants.DISABLED));
         removeVectorsAfterCommit(documentId);
     }
 

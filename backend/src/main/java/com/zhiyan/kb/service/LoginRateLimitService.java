@@ -40,6 +40,24 @@ public class LoginRateLimitService {
         }
     }
 
+    public void consumeAttempt(String username, String clientIp) {
+        try {
+            for (String key : keys(username, clientIp)) {
+                Long attempts = redisTemplate.opsForValue().increment(key);
+                if (attempts != null && attempts == 1L) {
+                    redisTemplate.expire(key, lockDuration);
+                }
+                if (attempts != null && attempts > maxFailures) {
+                    throw new BusinessException(429, "Too many failed login attempts. Try again later");
+                }
+            }
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.warn("Login rate-limit attempt record failed, allowing login attempt", ex);
+        }
+    }
+
     public void recordFailure(String username, String clientIp) {
         try {
             for (String key : keys(username, clientIp)) {

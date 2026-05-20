@@ -1,5 +1,6 @@
 package com.zhiyan.kb.controller;
 
+import com.zhiyan.kb.dto.UpdateFaqRequest;
 import com.zhiyan.kb.entity.KbFaq;
 import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.service.ResourceAccessService;
@@ -22,14 +23,10 @@ class FaqControllerTest {
         existing.setStatus("NORMAL");
         when(faqMapper.selectById(10L)).thenReturn(existing);
         FaqController controller = new FaqController(faqMapper, accessService);
-        KbFaq request = new KbFaq();
-        request.setSpaceId(999L);
-        request.setDocumentId(888L);
+        UpdateFaqRequest request = new UpdateFaqRequest();
         request.setQuestion("question");
         request.setAnswer("answer");
         request.setTags("tag");
-        request.setCreateType("AI_GENERATED");
-        request.setStatus("DELETED");
 
         controller.update(10L, request);
 

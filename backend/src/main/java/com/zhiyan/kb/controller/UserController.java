@@ -2,10 +2,13 @@ package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zhiyan.kb.common.BusinessException;
 import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
+import com.zhiyan.kb.common.StatusConstants;
+import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.dto.CreateUserRequest;
 import com.zhiyan.kb.dto.ResetPasswordRequest;
 import com.zhiyan.kb.dto.UpdateUserStatusRequest;
@@ -32,10 +35,11 @@ public class UserController {
     public Result<PageResult<SysUser>> list(@RequestParam(defaultValue = "1") long page, @RequestParam(defaultValue = "20") long size, @RequestParam(required = false) String keyword) {
         page = Math.max(1, page);
         size = Math.min(100, Math.max(1, size));
-        LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<SysUser>()
-                .like(keyword != null && !keyword.isBlank(), SysUser::getUsername, keyword)
-                .or(keyword != null && !keyword.isBlank()).like(keyword != null && !keyword.isBlank(), SysUser::getRealName, keyword)
-                .orderByDesc(SysUser::getCreateTime);
+        LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<SysUser>();
+        if (keyword != null && !keyword.isBlank()) {
+            qw.and(w -> w.like(SysUser::getUsername, keyword).or().like(SysUser::getRealName, keyword));
+        }
+        qw.ne(SysUser::getStatus, StatusConstants.DELETED).orderByDesc(SysUser::getCreateTime);
         Page<SysUser> p = userMapper.selectPage(Page.of(page, size), qw);
         p.getRecords().forEach(u -> u.setPassword(null));
         return Result.ok(new PageResult<>(p.getTotal(), page, size, p.getRecords()));
@@ -51,7 +55,7 @@ public class UserController {
         user.setPhone(blankToNull(request.getPhone()));
         user.setRole(request.getRole());
         user.setDepartmentId(request.getDepartmentId());
-        user.setStatus(request.getStatus() == null ? "ENABLED" : request.getStatus());
+        user.setStatus(request.getStatus() == null ? StatusConstants.ENABLED : request.getStatus());
         userMapper.insert(user);
         user.setPassword(null);
         return Result.ok(user);
@@ -59,6 +63,7 @@ public class UserController {
 
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
+        guardSelfPrivilegeChange(id, request.getRole(), request.getStatus());
         SysUser user = new SysUser();
         user.setId(id);
         user.setRealName(request.getRealName());
@@ -73,12 +78,19 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
-        userMapper.deleteById(id);
+        if (UserContext.userId().equals(id)) {
+            throw new BusinessException(400, "Cannot delete current user");
+        }
+        SysUser user = new SysUser();
+        user.setId(id);
+        user.setStatus(StatusConstants.DELETED);
+        userMapper.updateById(user);
         return Result.ok();
     }
 
     @PutMapping("/{id}/status")
     public Result<Void> status(@PathVariable Long id, @Valid @RequestBody UpdateUserStatusRequest request) {
+        guardSelfPrivilegeChange(id, null, request.getStatus());
         SysUser user = new SysUser();
         user.setId(id);
         user.setStatus(request.getStatus());
@@ -97,5 +109,17 @@ public class UserController {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    private void guardSelfPrivilegeChange(Long id, String role, String status) {
+        if (!UserContext.userId().equals(id)) {
+            return;
+        }
+        if (role != null && !RoleNames.ADMIN.equals(role)) {
+            throw new BusinessException(400, "Cannot downgrade current administrator");
+        }
+        if (StatusConstants.DISABLED.equals(status) || StatusConstants.DELETED.equals(status)) {
+            throw new BusinessException(400, "Cannot disable current user");
+        }
     }
 }

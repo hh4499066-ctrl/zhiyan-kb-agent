@@ -3,6 +3,7 @@ package com.zhiyan.kb.service;
 import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zhiyan.kb.common.BusinessException;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.entity.DocumentProcessingTask;
 import com.zhiyan.kb.entity.KbDocument;
@@ -105,8 +106,8 @@ public class DocumentUploadService {
             document.setFileSize(fileSize);
             document.setFileUrl(fileKey);
             document.setParseStatus("UPLOADED");
-            document.setVectorStatus("PENDING");
-            document.setStatus("NORMAL");
+            document.setVectorStatus(StatusConstants.PENDING);
+            document.setStatus(StatusConstants.NORMAL);
             document.setUploaderId(UserContext.userId());
             documentMapper.insert(document);
             DocumentProcessingTask task = createTask(document.getId(), fileKey, ext);
@@ -121,7 +122,7 @@ public class DocumentUploadService {
         task.setDocumentId(documentId);
         task.setFileUrl(fileKey);
         task.setFileType(fileType);
-        task.setStatus("PENDING");
+        task.setStatus(StatusConstants.PENDING);
         task.setRetryCount(0);
         task.setMaxRetries(3);
         return task;
@@ -149,8 +150,12 @@ public class DocumentUploadService {
                 throw new BusinessException(400, "Invalid DOCX file");
             }
         }
-        if ("docx".equals(ext) && !hasRequiredDocxEntries(file.getInputStream())) {
-            throw new BusinessException(400, "Invalid DOCX file");
+        if ("docx".equals(ext)) {
+            try (InputStream input = file.getInputStream()) {
+                if (!hasRequiredDocxEntries(input)) {
+                    throw new BusinessException(400, "Invalid DOCX file");
+                }
+            }
         }
     }
 

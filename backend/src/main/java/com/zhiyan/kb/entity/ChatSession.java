@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class ChatSession extends BaseEntity {
     @TableId
-    private Long id;
+    private String id;
     private Long userId;
     private Long spaceId;
     private String title;

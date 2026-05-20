@@ -64,7 +64,7 @@ class DocumentControllerTest {
     void hasRequiredDocxEntriesAcceptsDocxPackageShape() throws Exception {
         byte[] docx = zip("[Content_Types].xml", "word/document.xml");
 
-        boolean valid = DocumentController.hasRequiredDocxEntries(new ByteArrayInputStream(docx));
+        boolean valid = DocumentUploadService.hasRequiredDocxEntries(new ByteArrayInputStream(docx));
 
         assertThat(valid).isTrue();
     }
@@ -73,7 +73,7 @@ class DocumentControllerTest {
     void hasRequiredDocxEntriesRejectsPlainZipPackage() throws Exception {
         byte[] zip = zip("readme.txt", "word/styles.xml");
 
-        boolean valid = DocumentController.hasRequiredDocxEntries(new ByteArrayInputStream(zip));
+        boolean valid = DocumentUploadService.hasRequiredDocxEntries(new ByteArrayInputStream(zip));
 
         assertThat(valid).isFalse();
     }

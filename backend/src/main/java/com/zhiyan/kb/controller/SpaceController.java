@@ -7,9 +7,13 @@ import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.RequireRole;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
+import com.zhiyan.kb.common.StatusConstants;
+import com.zhiyan.kb.dto.CreateSpaceRequest;
+import com.zhiyan.kb.dto.UpdateSpaceRequest;
 import com.zhiyan.kb.entity.KbSpace;
 import com.zhiyan.kb.mapper.KbSpaceMapper;
 import com.zhiyan.kb.service.ResourceAccessService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,7 +50,7 @@ public class SpaceController {
         Page<KbSpace> result = spaceMapper.selectPage(Page.of(page, size), new LambdaQueryWrapper<KbSpace>()
                 .in(KbSpace::getId, accessibleSpaceIds)
                 .like(keyword != null && !keyword.isBlank(), KbSpace::getName, keyword)
-                .ne(KbSpace::getStatus, "DELETED")
+                .ne(KbSpace::getStatus, StatusConstants.DELETED)
                 .orderByDesc(KbSpace::getCreateTime));
         return Result.ok(new PageResult<>(result.getTotal(), page, size, result.getRecords()));
     }
@@ -55,7 +59,7 @@ public class SpaceController {
     public Result<KbSpace> detail(@PathVariable Long id) {
         accessService.requireSpaceAccess(id);
         KbSpace space = spaceMapper.selectById(id);
-        if (space == null || "DELETED".equals(space.getStatus())) {
+        if (space == null || StatusConstants.DELETED.equals(space.getStatus())) {
             throw new BusinessException(404, "Space not found");
         }
         return Result.ok(space);
@@ -63,20 +67,32 @@ public class SpaceController {
 
     @PostMapping
     @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
-    public Result<KbSpace> create(@RequestBody KbSpace space) {
-        space.setStatus(space.getStatus() == null ? "NORMAL" : space.getStatus());
-        space.setDocumentCount(space.getDocumentCount() == null ? 0 : space.getDocumentCount());
-        space.setQaCount(space.getQaCount() == null ? 0 : space.getQaCount());
+    public Result<KbSpace> create(@Valid @RequestBody CreateSpaceRequest request) {
+        KbSpace space = new KbSpace();
+        space.setName(request.getName());
+        space.setCode(request.getCode());
+        space.setDescription(request.getDescription());
+        space.setOwnerId(request.getOwnerId());
+        space.setVisibility(request.getVisibility() == null ? "PUBLIC" : request.getVisibility());
+        space.setDepartmentId(request.getDepartmentId());
+        space.setStatus(StatusConstants.NORMAL);
+        space.setDocumentCount(0);
+        space.setQaCount(0);
         spaceMapper.insert(space);
         return Result.ok(space);
     }
 
     @PutMapping("/{id}")
     @RequireRole({RoleNames.ADMIN, RoleNames.KB_MANAGER})
-    public Result<Void> update(@PathVariable Long id, @RequestBody KbSpace space) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateSpaceRequest request) {
         accessService.requireSpaceManage(id);
-        space.setId(id);
-        spaceMapper.updateById(space);
+        KbSpace update = new KbSpace();
+        update.setId(id);
+        update.setName(request.getName());
+        update.setDescription(request.getDescription());
+        update.setVisibility(request.getVisibility());
+        update.setDepartmentId(request.getDepartmentId());
+        spaceMapper.updateById(update);
         return Result.ok();
     }
 
@@ -86,7 +102,7 @@ public class SpaceController {
         accessService.requireSpaceManage(id);
         KbSpace space = new KbSpace();
         space.setId(id);
-        space.setStatus("DELETED");
+        space.setStatus(StatusConstants.DELETED);
         spaceMapper.updateById(space);
         return Result.ok();
     }

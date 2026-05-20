@@ -6,6 +6,7 @@ import com.zhiyan.kb.ai.LLMClient;
 import com.zhiyan.kb.common.BusinessException;
 import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.Result;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.dto.UpdateDocumentRequest;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.entity.KbDocumentChunk;
@@ -16,6 +17,7 @@ import com.zhiyan.kb.mapper.KbFaqMapper;
 import com.zhiyan.kb.service.ChunkService;
 import com.zhiyan.kb.service.DocumentProcessingService;
 import com.zhiyan.kb.service.DocumentUploadService;
+import com.zhiyan.kb.service.AiRateLimitService;
 import com.zhiyan.kb.service.ResourceAccessService;
 import com.zhiyan.kb.vo.DocumentDetailVO;
 import com.zhiyan.kb.vo.DocumentListVO;
@@ -32,8 +34,8 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,11 +50,13 @@ public class DocumentController {
     private final ResourceAccessService accessService;
     private final DocumentUploadService uploadService;
     private final DocumentProcessingService processingService;
+    private final AiRateLimitService aiRateLimitService;
 
     public DocumentController(KbDocumentMapper documentMapper, KbDocumentChunkMapper chunkMapper,
                               KbFaqMapper faqMapper, ChunkService chunkService,
                               LLMClient llmClient, ResourceAccessService accessService,
-                              DocumentUploadService uploadService, DocumentProcessingService processingService) {
+                              DocumentUploadService uploadService, DocumentProcessingService processingService,
+                              AiRateLimitService aiRateLimitService) {
         this.documentMapper = documentMapper;
         this.chunkMapper = chunkMapper;
         this.faqMapper = faqMapper;
@@ -61,6 +65,15 @@ public class DocumentController {
         this.accessService = accessService;
         this.uploadService = uploadService;
         this.processingService = processingService;
+        this.aiRateLimitService = aiRateLimitService;
+    }
+
+    public DocumentController(KbDocumentMapper documentMapper, KbDocumentChunkMapper chunkMapper,
+                              KbFaqMapper faqMapper, ChunkService chunkService,
+                              LLMClient llmClient, ResourceAccessService accessService,
+                              DocumentUploadService uploadService, DocumentProcessingService processingService) {
+        this(documentMapper, chunkMapper, faqMapper, chunkService, llmClient, accessService, uploadService,
+                processingService, null);
     }
 
     @GetMapping
@@ -81,7 +94,7 @@ public class DocumentController {
                 .eq(spaceId != null, KbDocument::getSpaceId, spaceId)
                 .in(spaceId == null, KbDocument::getSpaceId, accessibleSpaceIds)
                 .like(keyword != null && !keyword.isBlank(), KbDocument::getTitle, keyword)
-                .eq(KbDocument::getStatus, "NORMAL")
+                .eq(KbDocument::getStatus, StatusConstants.NORMAL)
                 .orderByDesc(KbDocument::getCreateTime);
         Page<KbDocument> result = documentMapper.selectPage(Page.of(page, size), query);
         List<DocumentListVO> records = result.getRecords().stream().map(DocumentListVO::from).toList();
@@ -114,7 +127,7 @@ public class DocumentController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         KbDocument document = accessService.requireDocumentManage(id);
-        document.setStatus("DELETED");
+        document.setStatus(StatusConstants.DELETED);
         documentMapper.updateById(document);
         chunkService.disableDocumentChunks(id);
         return Result.ok();
@@ -132,43 +145,113 @@ public class DocumentController {
         accessService.requireDocument(id);
         return Result.ok(chunkMapper.selectList(new LambdaQueryWrapper<KbDocumentChunk>()
                 .eq(KbDocumentChunk::getDocumentId, id)
-                .eq(KbDocumentChunk::getStatus, "NORMAL")
+                .eq(KbDocumentChunk::getStatus, StatusConstants.NORMAL)
                 .orderByAsc(KbDocumentChunk::getChunkIndex)));
     }
 
     @PostMapping("/{id}/ai-summary")
     public Result<Map<String, Object>> summary(@PathVariable Long id) {
+        assertAiAllowed("document-summary");
         KbDocument document = accessService.requireDocumentManage(id);
         String text = llmClient.complete("Summarize this document and extract keywords, audience and reading tips:\n"
                 + document.getContentText());
+        Map<String, Object> parsed = parseSummary(text);
         document.setSummary(text);
-        document.setKeywords("AI summary,knowledge base,document");
+        document.setKeywords((String) parsed.get("keywords"));
         documentMapper.updateById(document);
-        return Result.ok(Map.of(
-                "summary", text,
-                "keywords", document.getKeywords(),
-                "audience", "Enterprise users",
-                "readingTips", "Read the summary first, then inspect the cited sections."
-        ));
+        return Result.ok(parsed);
     }
 
     @PostMapping("/{id}/generate-faq")
     public Result<List<KbFaq>> generateFaq(@PathVariable Long id) {
+        assertAiAllowed("document-faq");
         KbDocument document = accessService.requireDocumentManage(id);
         String faqText = llmClient.complete("Generate FAQ items from this document:\n" + document.getContentText());
-        KbFaq faq = new KbFaq();
-        faq.setSpaceId(document.getSpaceId());
-        faq.setDocumentId(document.getId());
-        faq.setQuestion("What problem does this document mainly solve?");
-        faq.setAnswer(faqText);
-        faq.setTags("AI_GENERATED,DOCUMENT_FAQ");
-        faq.setCreateType("AI_GENERATED");
-        faq.setStatus("NORMAL");
-        faqMapper.insert(faq);
-        return Result.ok(List.of(faq));
+        List<KbFaq> faqs = parseFaqs(faqText).stream().map(item -> {
+            KbFaq faq = new KbFaq();
+            faq.setSpaceId(document.getSpaceId());
+            faq.setDocumentId(document.getId());
+            faq.setQuestion(item.question());
+            faq.setAnswer(item.answer());
+            faq.setTags("AI_GENERATED,DOCUMENT_FAQ");
+            faq.setCreateType("AI_GENERATED");
+            faq.setStatus(StatusConstants.NORMAL);
+            faqMapper.insert(faq);
+            return faq;
+        }).toList();
+        return Result.ok(faqs);
     }
 
-    public static boolean hasRequiredDocxEntries(InputStream input) throws IOException {
-        return DocumentUploadService.hasRequiredDocxEntries(input);
+    private Map<String, Object> parseSummary(String text) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("summary", text);
+        result.put("keywords", extractLineValue(text, "keywords", "AI summary,knowledge base,document"));
+        result.put("audience", extractLineValue(text, "audience", ""));
+        result.put("readingTips", extractLineValue(text, "reading tips", ""));
+        return result;
+    }
+
+    private void assertAiAllowed(String action) {
+        if (aiRateLimitService != null) {
+            aiRateLimitService.assertAllowed(action);
+        }
+    }
+
+    private String extractLineValue(String text, String key, String fallback) {
+        if (text == null || text.isBlank()) {
+            return fallback;
+        }
+        String normalizedKey = key.toLowerCase();
+        for (String line : text.split("\\R")) {
+            String trimmed = line.trim();
+            int separator = Math.max(trimmed.indexOf(':'), trimmed.indexOf('\uff1a'));
+            if (separator > 0 && trimmed.substring(0, separator).trim().toLowerCase().contains(normalizedKey)) {
+                String value = trimmed.substring(separator + 1).trim();
+                return value.isBlank() ? fallback : value;
+            }
+        }
+        return fallback;
+    }
+
+    private List<FaqItem> parseFaqs(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of(new FaqItem("What does this document cover?", "No FAQ content was generated."));
+        }
+        List<FaqItem> items = new ArrayList<>();
+        String currentQuestion = null;
+        StringBuilder currentAnswer = new StringBuilder();
+        for (String line : text.split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.matches("(?i)^q\\d*[:：].*")) {
+                addFaq(items, currentQuestion, currentAnswer);
+                currentQuestion = trimmed.replaceFirst("(?i)^q\\d*[:：]\\s*", "");
+                currentAnswer.setLength(0);
+            } else if (trimmed.matches("(?i)^a\\d*[:：].*")) {
+                currentAnswer.append(trimmed.replaceFirst("(?i)^a\\d*[:：]\\s*", ""));
+            } else if (!trimmed.isBlank()) {
+                if (!currentAnswer.isEmpty()) {
+                    currentAnswer.append('\n');
+                }
+                currentAnswer.append(trimmed);
+            }
+        }
+        addFaq(items, currentQuestion, currentAnswer);
+        if (items.isEmpty()) {
+            items.add(new FaqItem("What does this document cover?", text));
+        }
+        return items.stream().limit(10).toList();
+    }
+
+    private void addFaq(List<FaqItem> items, String question, StringBuilder answer) {
+        if (question != null && !question.isBlank() && !answer.isEmpty()) {
+            items.add(new FaqItem(limit(question, 500), limit(answer.toString(), 5000)));
+        }
+    }
+
+    private String limit(String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max);
+    }
+
+    private record FaqItem(String question, String answer) {
     }
 }

@@ -1,11 +1,15 @@
 package com.zhiyan.kb.controller;
 
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.UserContext;
+import com.zhiyan.kb.dto.CreateMemoryRequest;
+import com.zhiyan.kb.dto.UpdateMemoryRequest;
 import com.zhiyan.kb.entity.UserLongTermMemory;
 import com.zhiyan.kb.mapper.UserLongTermMemoryMapper;
 import com.zhiyan.kb.service.LongTermMemoryService;
 import com.zhiyan.kb.service.ResourceAccessService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/memories")
@@ -37,22 +42,27 @@ public class MemoryController {
     }
 
     @PostMapping
-    public Result<UserLongTermMemory> create(@RequestBody UserLongTermMemory memory) {
+    public Result<UserLongTermMemory> create(@Valid @RequestBody CreateMemoryRequest request) {
+        UserLongTermMemory memory = new UserLongTermMemory();
         memory.setUserId(UserContext.userId());
-        memory.setStatus("NORMAL");
-        memory.setEmbeddingText(memory.getContent());
-        memory.setVectorId("mock-memory-" + System.currentTimeMillis());
+        memory.setMemoryType(request.getMemoryType());
+        memory.setContent(request.getContent());
+        memory.setStatus(StatusConstants.NORMAL);
+        memory.setEmbeddingText(request.getContent());
+        memory.setVectorId("memory-" + UUID.randomUUID());
         memoryMapper.insert(memory);
         return Result.ok(memory);
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody UserLongTermMemory memory) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateMemoryRequest request) {
         accessService.requireOwnMemory(id);
-        memory.setId(id);
-        memory.setUserId(UserContext.userId());
-        memory.setEmbeddingText(memory.getContent());
-        memoryMapper.updateById(memory);
+        UserLongTermMemory update = new UserLongTermMemory();
+        update.setId(id);
+        update.setMemoryType(request.getMemoryType());
+        update.setContent(request.getContent());
+        update.setEmbeddingText(request.getContent());
+        memoryMapper.updateById(update);
         return Result.ok();
     }
 
@@ -61,7 +71,7 @@ public class MemoryController {
         accessService.requireOwnMemory(id);
         UserLongTermMemory memory = new UserLongTermMemory();
         memory.setId(id);
-        memory.setStatus("DELETED");
+        memory.setStatus(StatusConstants.DELETED);
         memoryMapper.updateById(memory);
         return Result.ok();
     }

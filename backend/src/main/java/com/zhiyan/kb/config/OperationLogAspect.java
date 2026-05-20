@@ -14,12 +14,15 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Aspect
 @Component
 public class OperationLogAspect {
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");
+    private static final Set<String> SENSITIVE_FIELD_NAMES = Set.of("password", "token", "authorization", "apiKey", "api_key");
     private final OperationLogMapper operationLogMapper;
 
     public OperationLogAspect(OperationLogMapper operationLogMapper) {
@@ -67,7 +70,35 @@ public class OperationLogAspect {
         if (type.contains("MultipartFile") || type.contains("Servlet")) {
             return type;
         }
+        if (arg instanceof String || arg instanceof Number || arg instanceof Boolean || arg instanceof Enum<?>) {
+            return arg;
+        }
+        if (arg instanceof Map<?, ?> map) {
+            Map<Object, Object> sanitized = new LinkedHashMap<>();
+            map.forEach((key, value) -> sanitized.put(key, isSensitive(String.valueOf(key)) ? "***" : value));
+            return sanitized;
+        }
+        if (!type.startsWith("com.zhiyan.kb.")) {
+            return type;
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        for (java.lang.reflect.Field field : arg.getClass().getDeclaredFields()) {
+            try {
+                field.setAccessible(true);
+                sanitized.put(field.getName(), isSensitive(field.getName()) ? "***" : field.get(arg));
+            } catch (IllegalAccessException ignored) {
+                sanitized.put(field.getName(), "<unavailable>");
+            }
+        }
+        if (!sanitized.isEmpty()) {
+            return sanitized;
+        }
         return arg;
+    }
+
+    private boolean isSensitive(String fieldName) {
+        String normalized = fieldName == null ? "" : fieldName.trim();
+        return SENSITIVE_FIELD_NAMES.stream().anyMatch(item -> item.equalsIgnoreCase(normalized));
     }
 
     private String resolveModule(String uri) {

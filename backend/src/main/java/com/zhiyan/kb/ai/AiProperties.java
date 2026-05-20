@@ -12,7 +12,8 @@ public class AiProperties {
     private String provider = "deepseek";
     private String baseUrl = "https://api.deepseek.com";
     private String apiKey = "";
-    private String chatModel = "deepseek-chat";
+    private String chatModel = "deepseek-v4-flash";
+    private java.util.List<String> chatModelAllowlist = java.util.List.of("deepseek-v4-flash", "deepseek-v4-pro");
     private Double temperature = 0.3;
     private Integer maxTokens = 1600;
     private Integer connectTimeoutMillis = 5000;
@@ -34,7 +35,7 @@ public class AiProperties {
 
     public String cleanChatModel() {
         String value = clean(chatModel);
-        return value == null || value.isBlank() ? "deepseek-chat" : value;
+        return value == null || value.isBlank() ? "deepseek-v4-flash" : value;
     }
 
     private String clean(String value) {

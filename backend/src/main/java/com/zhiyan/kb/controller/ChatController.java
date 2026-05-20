@@ -2,11 +2,15 @@ package com.zhiyan.kb.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import cn.hutool.core.util.IdUtil;
 import com.zhiyan.kb.common.PageResult;
 import com.zhiyan.kb.common.Result;
 import com.zhiyan.kb.common.RoleNames;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.common.UserContext;
 import com.zhiyan.kb.dto.ChatAskRequest;
+import com.zhiyan.kb.dto.ChatFeedbackRequest;
+import com.zhiyan.kb.dto.CreateChatSessionRequest;
 import com.zhiyan.kb.entity.ChatFeedback;
 import com.zhiyan.kb.entity.ChatRecord;
 import com.zhiyan.kb.entity.ChatSession;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -65,33 +70,27 @@ public class ChatController {
                                                             @RequestParam(defaultValue = "20") long size) {
         page = Math.max(1, page);
         size = Math.min(100, Math.max(1, size));
-        LambdaQueryWrapper<ChatRecord> query = new LambdaQueryWrapper<ChatRecord>().orderByDesc(ChatRecord::getCreateTime);
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ChatRecord> query =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ChatRecord>()
+                        .select("session_id AS sessionId",
+                                "MAX(space_id) AS spaceId",
+                                "MAX(create_time) AS updateTime",
+                                "SUBSTRING_INDEX(GROUP_CONCAT(question ORDER BY create_time ASC SEPARATOR '\\n'), '\\n', 1) AS firstQuestion")
+                        .groupBy("session_id")
+                        .orderByDesc("MAX(create_time)");
         if (!RoleNames.ADMIN.equals(UserContext.role())) {
-            query.eq(ChatRecord::getUserId, UserContext.userId());
+            query.eq("user_id", UserContext.userId());
         }
-        Page<ChatRecord> recordPage = recordMapper.selectPage(Page.of(page, Math.min(size * 5, 100)), query);
-        List<ChatRecord> records = recordPage.getRecords();
-        Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
-        for (ChatRecord record : records) {
-            Map<String, Object> session = grouped.computeIfAbsent(record.getSessionId(), sessionId -> {
-                Map<String, Object> newSession = new LinkedHashMap<>();
-                newSession.put("sessionId", sessionId);
-                newSession.put("spaceId", record.getSpaceId());
-                newSession.put("updateTime", record.getCreateTime());
-                newSession.put("_firstQuestionTime", record.getCreateTime());
-                newSession.put("title", titleOf(record.getQuestion()));
-                return newSession;
-            });
-            LocalDateTime firstQuestionTime = (LocalDateTime) session.get("_firstQuestionTime");
-            if (firstQuestionTime == null || record.getCreateTime().isBefore(firstQuestionTime)) {
-                session.put("_firstQuestionTime", record.getCreateTime());
-                session.put("title", titleOf(record.getQuestion()));
-            }
-        }
-        List<Map<String, Object>> sessions = new ArrayList<>(grouped.values());
-        sessions.forEach(session -> session.remove("_firstQuestionTime"));
-        sessions = sessions.stream().limit(size).toList();
-        return Result.ok(new PageResult<>(recordPage.getTotal(), page, size, sessions));
+        Page<Map<String, Object>> result = recordMapper.selectMapsPage(Page.of(page, size), query);
+        List<Map<String, Object>> sessions = result.getRecords().stream().map(row -> {
+            Map<String, Object> session = new LinkedHashMap<>();
+            session.put("sessionId", row.get("sessionId"));
+            session.put("spaceId", row.get("spaceId"));
+            session.put("updateTime", row.get("updateTime"));
+            session.put("title", titleOf((String) row.get("firstQuestion")));
+            return session;
+        }).toList();
+        return Result.ok(new PageResult<>(result.getTotal(), page, size, sessions));
     }
 
     private String titleOf(String question) {
@@ -100,22 +99,24 @@ public class ChatController {
     }
 
     @PostMapping("/sessions")
-    public Result<ChatSession> createSession(@RequestBody ChatSession session) {
+    public Result<ChatSession> createSession(@Valid @RequestBody CreateChatSessionRequest request) {
+        ChatSession session = new ChatSession();
+        session.setId(IdUtil.fastSimpleUUID());
         session.setUserId(UserContext.userId());
-        session.setStatus("NORMAL");
-        session.setTitle(session.getTitle() == null ? "New chat" : session.getTitle());
+        session.setSpaceId(request.getSpaceId());
+        session.setStatus(StatusConstants.NORMAL);
+        session.setTitle(request.getTitle() == null || request.getTitle().isBlank() ? "New chat" : request.getTitle());
         sessionMapper.insert(session);
         return Result.ok(session);
     }
 
     @DeleteMapping("/sessions/{id}")
+    @Transactional
     public Result<Void> deleteSession(@PathVariable String id) {
-        if (id.matches("\\d+")) {
-            ChatSession session = sessionMapper.selectById(Long.valueOf(id));
-            if (session != null && (RoleNames.ADMIN.equals(UserContext.role()) || UserContext.userId().equals(session.getUserId()))) {
-                session.setStatus("DELETED");
-                sessionMapper.updateById(session);
-            }
+        ChatSession session = sessionMapper.selectById(id);
+        if (session != null && (RoleNames.ADMIN.equals(UserContext.role()) || UserContext.userId().equals(session.getUserId()))) {
+            session.setStatus(StatusConstants.DELETED);
+            sessionMapper.updateById(session);
         }
         recordMapper.delete(new LambdaQueryWrapper<ChatRecord>()
                 .eq(ChatRecord::getSessionId, id)
@@ -158,10 +159,13 @@ public class ChatController {
     }
 
     @PostMapping("/records/{id}/feedback")
-    public Result<ChatFeedback> feedback(@PathVariable Long id, @RequestBody ChatFeedback feedback) {
+    public Result<ChatFeedback> feedback(@PathVariable Long id, @Valid @RequestBody ChatFeedbackRequest request) {
         accessService.requireChatRecord(id);
+        ChatFeedback feedback = new ChatFeedback();
         feedback.setRecordId(id);
         feedback.setUserId(UserContext.userId());
+        feedback.setHelpful(request.getHelpful());
+        feedback.setComment(request.getComment());
         feedbackMapper.insert(feedback);
         return Result.ok(feedback);
     }

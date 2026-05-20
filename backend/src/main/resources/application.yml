@@ -37,11 +37,13 @@ zhiyan:
     base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
     api-key: ${DEEPSEEK_API_KEY:}
     chat-model: ${DEEPSEEK_CHAT_MODEL:deepseek-v4-flash}
+    chat-model-allowlist: ${DEEPSEEK_CHAT_MODEL_ALLOWLIST:deepseek-v4-flash,deepseek-v4-pro}
     temperature: ${DEEPSEEK_TEMPERATURE:0.3}
     max-tokens: ${DEEPSEEK_MAX_TOKENS:1600}
     connect-timeout-millis: ${DEEPSEEK_CONNECT_TIMEOUT_MILLIS:5000}
     read-timeout-millis: ${DEEPSEEK_READ_TIMEOUT_MILLIS:30000}
     max-retries: ${DEEPSEEK_MAX_RETRIES:2}
+    rate-limit-per-minute: ${ZHIYAN_AI_RATE_LIMIT_PER_MINUTE:5}
   upload-dir: uploads
   cors:
     allowed-origins: ${ZHIYAN_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}

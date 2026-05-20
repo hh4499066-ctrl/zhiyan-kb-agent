@@ -3,6 +3,7 @@ package com.zhiyan.kb.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zhiyan.kb.common.BusinessException;
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.entity.DocumentProcessingTask;
 import com.zhiyan.kb.entity.KbDocument;
 import com.zhiyan.kb.mapper.DocumentProcessingTaskMapper;
@@ -50,7 +51,7 @@ public class DocumentProcessingService {
         this.uploadDir = uploadDir;
     }
 
-    @Async
+    @Async("documentProcessingExecutor")
     @EventListener
     public void process(DocumentProcessingEvent event) {
         if (event.taskId() != null) {
@@ -73,14 +74,14 @@ public class DocumentProcessingService {
             KbDocument update = new KbDocument();
             update.setId(document.getId());
             update.setParseStatus("UPLOADED");
-            update.setVectorStatus("PENDING");
+            update.setVectorStatus(StatusConstants.PENDING);
             documentMapper.updateById(update);
 
             DocumentProcessingTask created = new DocumentProcessingTask();
             created.setDocumentId(document.getId());
             created.setFileUrl(document.getFileUrl());
             created.setFileType(document.getFileType());
-            created.setStatus("PENDING");
+            created.setStatus(StatusConstants.PENDING);
             created.setRetryCount(0);
             created.setMaxRetries(DEFAULT_MAX_RETRIES);
             taskMapper.insert(created);
@@ -92,8 +93,8 @@ public class DocumentProcessingService {
     @EventListener(ApplicationReadyEvent.class)
     public void recoverOutstandingTasks() {
         taskMapper.update(null, new LambdaUpdateWrapper<DocumentProcessingTask>()
-                .eq(DocumentProcessingTask::getStatus, "RUNNING")
-                .set(DocumentProcessingTask::getStatus, "PENDING"));
+                .eq(DocumentProcessingTask::getStatus, StatusConstants.RUNNING)
+                .set(DocumentProcessingTask::getStatus, StatusConstants.PENDING));
         republishPendingTasks();
     }
 
@@ -104,7 +105,7 @@ public class DocumentProcessingService {
 
     public void processTask(Long taskId) {
         DocumentProcessingTask task = taskMapper.selectById(taskId);
-        if (task == null || !"PENDING".equals(task.getStatus())) {
+        if (task == null || !StatusConstants.PENDING.equals(task.getStatus())) {
             return;
         }
         if (!markTaskRunning(task)) {
@@ -120,22 +121,22 @@ public class DocumentProcessingService {
 
     private void processDocument(Long documentId, Path file, String fileType) {
         KbDocument document = documentMapper.selectById(documentId);
-        if (document == null || "DELETED".equals(document.getStatus())) {
+        if (document == null || StatusConstants.DELETED.equals(document.getStatus())) {
             return;
         }
         try {
-            updateStatus(document.getId(), "PARSING", "PENDING");
+            updateStatus(document.getId(), "PARSING", StatusConstants.PENDING);
             document.setContentText(parseService.parse(file.toFile(), fileType));
-            document.setParseStatus("SUCCESS");
+            document.setParseStatus(StatusConstants.SUCCESS);
             document.setVectorStatus("PROCESSING");
             documentMapper.updateById(document);
 
             chunkService.rebuildChunks(document);
-            updateStatus(document.getId(), "SUCCESS", "SUCCESS");
+            updateStatus(document.getId(), StatusConstants.SUCCESS, StatusConstants.SUCCESS);
         } catch (Exception ex) {
             log.warn("Document processing failed, documentId={}", documentId, ex);
             chunkService.disableDocumentChunks(documentId);
-            updateStatus(documentId, "FAILED", "FAILED");
+            updateStatus(documentId, StatusConstants.FAILED, StatusConstants.FAILED);
             if (ex instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
@@ -145,7 +146,7 @@ public class DocumentProcessingService {
 
     private void republishPendingTasks() {
         List<DocumentProcessingTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<DocumentProcessingTask>()
-                .eq(DocumentProcessingTask::getStatus, "PENDING")
+                .eq(DocumentProcessingTask::getStatus, StatusConstants.PENDING)
                 .apply("retry_count < max_retries"));
         for (DocumentProcessingTask task : tasks) {
             eventPublisher.publishEvent(new DocumentProcessingEvent(task.getId(), task.getDocumentId(),
@@ -165,17 +166,17 @@ public class DocumentProcessingService {
     private boolean markTaskRunning(DocumentProcessingTask task) {
         DocumentProcessingTask update = new DocumentProcessingTask();
         update.setId(task.getId());
-        update.setStatus("RUNNING");
+        update.setStatus(StatusConstants.RUNNING);
         update.setLastProcessTime(LocalDateTime.now());
         return taskMapper.update(update, new LambdaUpdateWrapper<DocumentProcessingTask>()
                 .eq(DocumentProcessingTask::getId, task.getId())
-                .eq(DocumentProcessingTask::getStatus, "PENDING")) > 0;
+                .eq(DocumentProcessingTask::getStatus, StatusConstants.PENDING)) > 0;
     }
 
     private void markTaskSuccess(Long taskId) {
         DocumentProcessingTask update = new DocumentProcessingTask();
         update.setId(taskId);
-        update.setStatus("SUCCESS");
+        update.setStatus(StatusConstants.SUCCESS);
         update.setLastError(null);
         update.setLastProcessTime(LocalDateTime.now());
         taskMapper.updateById(update);
@@ -187,7 +188,7 @@ public class DocumentProcessingService {
         DocumentProcessingTask update = new DocumentProcessingTask();
         update.setId(task.getId());
         update.setRetryCount(retryCount + 1);
-        update.setStatus(retryCount + 1 >= maxRetries ? "FAILED" : "PENDING");
+        update.setStatus(retryCount + 1 >= maxRetries ? StatusConstants.FAILED : StatusConstants.PENDING);
         update.setLastError(trimError(ex));
         update.setLastProcessTime(LocalDateTime.now());
         taskMapper.updateById(update);

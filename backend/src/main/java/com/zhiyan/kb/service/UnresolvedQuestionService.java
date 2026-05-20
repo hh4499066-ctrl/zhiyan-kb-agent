@@ -1,5 +1,6 @@
 package com.zhiyan.kb.service;
 
+import com.zhiyan.kb.common.StatusConstants;
 import com.zhiyan.kb.mapper.UnresolvedQuestionMapper;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +14,6 @@ public class UnresolvedQuestionService {
 
     public long pendingCount() {
         return mapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.zhiyan.kb.entity.UnresolvedQuestion>()
-                .eq(com.zhiyan.kb.entity.UnresolvedQuestion::getStatus, "PENDING"));
+                .eq(com.zhiyan.kb.entity.UnresolvedQuestion::getStatus, StatusConstants.PENDING));
     }
 }

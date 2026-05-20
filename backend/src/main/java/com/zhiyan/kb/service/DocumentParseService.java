@@ -68,37 +68,40 @@ public class DocumentParseService {
     private String parseDocxIfAvailable(File file) throws IOException {
         try {
             Class<?> documentClass = Class.forName("org.apache.poi.xwpf.usermodel.XWPFDocument");
-            Object document = documentClass.getConstructor(java.io.InputStream.class).newInstance(new FileInputStream(file));
-            try {
-                Method getParagraphs = documentClass.getMethod("getParagraphs");
-                @SuppressWarnings("unchecked")
-                java.util.List<Object> paragraphs = (java.util.List<Object>) getParagraphs.invoke(document);
-                if (paragraphs.size() > MAX_DOCX_PARAGRAPHS) {
-                    throw new IOException("DOCX paragraph count exceeds " + MAX_DOCX_PARAGRAPHS);
-                }
-                StringBuilder text = new StringBuilder();
-                for (Object paragraph : paragraphs) {
-                    appendBlock(text, invokeGetText(paragraph));
-                }
-
-                Method getTables = documentClass.getMethod("getTables");
-                @SuppressWarnings("unchecked")
-                java.util.List<Object> tables = (java.util.List<Object>) getTables.invoke(document);
-                if (tables.size() > MAX_DOCX_TABLES) {
-                    throw new IOException("DOCX table count exceeds " + MAX_DOCX_TABLES);
-                }
-                int cellCount = 0;
-                for (Object table : tables) {
-                    TableText tableText = tableText(table);
-                    cellCount += tableText.cellCount();
-                    if (cellCount > MAX_DOCX_TABLE_CELLS) {
-                        throw new IOException("DOCX table cell count exceeds " + MAX_DOCX_TABLE_CELLS);
+            try (FileInputStream input = new FileInputStream(file)) {
+                Object document;
+                document = documentClass.getConstructor(java.io.InputStream.class).newInstance(input);
+                try {
+                    Method getParagraphs = documentClass.getMethod("getParagraphs");
+                    @SuppressWarnings("unchecked")
+                    java.util.List<Object> paragraphs = (java.util.List<Object>) getParagraphs.invoke(document);
+                    if (paragraphs.size() > MAX_DOCX_PARAGRAPHS) {
+                        throw new IOException("DOCX paragraph count exceeds " + MAX_DOCX_PARAGRAPHS);
                     }
-                    appendBlock(text, tableText.text());
+                    StringBuilder text = new StringBuilder();
+                    for (Object paragraph : paragraphs) {
+                        appendBlock(text, invokeGetText(paragraph));
+                    }
+
+                    Method getTables = documentClass.getMethod("getTables");
+                    @SuppressWarnings("unchecked")
+                    java.util.List<Object> tables = (java.util.List<Object>) getTables.invoke(document);
+                    if (tables.size() > MAX_DOCX_TABLES) {
+                        throw new IOException("DOCX table count exceeds " + MAX_DOCX_TABLES);
+                    }
+                    int cellCount = 0;
+                    for (Object table : tables) {
+                        TableText tableText = tableText(table);
+                        cellCount += tableText.cellCount();
+                        if (cellCount > MAX_DOCX_TABLE_CELLS) {
+                            throw new IOException("DOCX table cell count exceeds " + MAX_DOCX_TABLE_CELLS);
+                        }
+                        appendBlock(text, tableText.text());
+                    }
+                    return text.toString().trim();
+                } finally {
+                    documentClass.getMethod("close").invoke(document);
                 }
-                return text.toString().trim();
-            } finally {
-                documentClass.getMethod("close").invoke(document);
             }
         } catch (ClassNotFoundException ex) {
             throw new IOException("DOCX parsing requires the poi-ooxml dependency. Run Maven reload or use txt/md for this build.", ex);

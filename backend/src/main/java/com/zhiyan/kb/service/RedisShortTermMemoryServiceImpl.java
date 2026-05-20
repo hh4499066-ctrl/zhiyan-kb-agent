@@ -4,16 +4,22 @@ import cn.hutool.json.JSONUtil;
 import com.zhiyan.kb.dto.ChatMemoryMessage;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class RedisShortTermMemoryServiceImpl implements ShortTermMemoryService {
+    private static final DefaultRedisScript<Long> RELEASE_LOCK_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            Long.class);
     private final StringRedisTemplate redisTemplate;
     private final int windowSize;
     private final long ttlMinutes;
@@ -28,12 +34,14 @@ public class RedisShortTermMemoryServiceImpl implements ShortTermMemoryService {
 
     @Override
     public void addMessage(String sessionId, Long userId, String role, String content) {
-        MemorySession session = loadSession(sessionId, userId);
-        session.getMessages().add(new ChatMemoryMessage(role, content, LocalDateTime.now()));
-        if (session.getMessages().size() > windowSize * 2) {
-            summarize(session);
-        }
-        saveSession(sessionId, userId, session);
+        withSessionLock(sessionId, userId, () -> {
+            MemorySession session = loadSession(sessionId, userId);
+            session.getMessages().add(new ChatMemoryMessage(role, content, LocalDateTime.now()));
+            if (session.getMessages().size() > windowSize * 2) {
+                summarize(session);
+            }
+            saveSession(sessionId, userId, session);
+        });
     }
 
     @Override
@@ -49,9 +57,11 @@ public class RedisShortTermMemoryServiceImpl implements ShortTermMemoryService {
 
     @Override
     public void summarizeOldMessages(String sessionId, Long userId) {
-        MemorySession session = loadSession(sessionId, userId);
-        summarize(session);
-        saveSession(sessionId, userId, session);
+        withSessionLock(sessionId, userId, () -> {
+            MemorySession session = loadSession(sessionId, userId);
+            summarize(session);
+            saveSession(sessionId, userId, session);
+        });
     }
 
     @Override
@@ -105,6 +115,30 @@ public class RedisShortTermMemoryServiceImpl implements ShortTermMemoryService {
 
     private void saveSession(String sessionId, Long userId, MemorySession session) {
         redisTemplate.opsForValue().set(key(sessionId, userId), JSONUtil.toJsonStr(session), Duration.ofMinutes(ttlMinutes));
+    }
+
+    private void withSessionLock(String sessionId, Long userId, Runnable action) {
+        String lockKey = key(sessionId, userId) + ":lock";
+        String token = UUID.randomUUID().toString();
+        long deadline = System.currentTimeMillis() + 1000L;
+        while (System.currentTimeMillis() < deadline) {
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, token, Duration.ofSeconds(3));
+            if (Boolean.TRUE.equals(acquired)) {
+                try {
+                    action.run();
+                    return;
+                } finally {
+                    redisTemplate.execute(RELEASE_LOCK_SCRIPT, Collections.singletonList(lockKey), token);
+                }
+            }
+            try {
+                Thread.sleep(25L);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for memory lock", ex);
+            }
+        }
+        throw new IllegalStateException("Short-term memory is busy");
     }
 
     private String key(String sessionId, Long userId) {
